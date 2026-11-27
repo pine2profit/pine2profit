@@ -20,7 +20,8 @@ src/lib/services/helpers/MarkdownHelperService   markdown-it + [[t:…]] [[range
 src/lib/services/view/IndexViewService      index_N.jsonl chunks, streamed, deduplicated by id, pushed to subscribers
 src/lib/services/view/{Messages,Candles,Pinescript}ViewService   one file per id, cached for the session, 404 → null
 src/lib/types.ts                     IndexLine (a jsonl line), IndexRow, Message, CandlesFile, PinescriptFile, ChartRef, Block
-src/components/RunsList.tsx          list: filters, sorting, VirtuosoGrid
+src/components/RunsList.tsx          list: filters and sorting in the query string (?kind=&verdict=&sub=&sort=&dir=),
+                                     subcategory chips from the data, VirtuosoGrid over the whole filtered set
 src/components/RunView.tsx           script page: header, verdict, rail, code, messages, chart, P&L
 src/components/ChartPanel.tsx        Vela: bars, author's script, trade rule, reference marks, ChartService.goto
 src/components/Answers.tsx           rendered messages; clicks go to LinkService

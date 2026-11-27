@@ -38,7 +38,7 @@ Required: `id`, `title`, `kind` (`indicator` | `strategy`), `verdict` (`YES` | `
 
 | field | meaning |
 |---|---|
-| `subcategory` | key from `modules/frontend/src/lib/taxonomy.ts` |
+| `subcategory` | any key; the list builds its filter chips from the values it sees, known keys from `modules/frontend/src/lib/taxonomy.ts` get a label |
 | `usable` | `false` when no signal is final at bar close (indicators): the page shows "not tradeable", no rule, no money |
 | `main` | 12 months via alerts, $ |
 | `paper`, `paperTrades` | paper journal since `cycleStart`, $ and number of trades |

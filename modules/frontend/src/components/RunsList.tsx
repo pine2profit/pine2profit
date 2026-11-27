@@ -1,32 +1,68 @@
 'use client';
 
 import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { VirtuosoGrid } from 'react-virtuoso';
 import ioc from '@/lib';
 import type { IndexRow, Kind, VerdictWord } from '@/lib/types';
-import { SUBCATS } from '@/lib/taxonomy';
+import { SUBCATS, subLabel } from '@/lib/taxonomy';
 import { RunCard } from './RunCard';
 
-const PAGE = 60; // cards appended per "reached the bottom"
+const KINDS: readonly Kind[] = ['indicator', 'strategy'];
+const VERDICTS: readonly VerdictWord[] = ['YES', 'NO', 'UNKNOWN'];
 const VERDICT_ORDER: Record<VerdictWord, number> = { YES: 0, UNKNOWN: 1, NO: 2 };
-type SortKey = 'verdict' | 'main' | 'paper' | 'expected' | 'updated' | 'title';
+const SORT_KEYS = ['verdict', 'main', 'paper', 'expected', 'updated', 'title'] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+const ASC_BY_DEFAULT: ReadonlySet<SortKey> = new Set<SortKey>(['verdict', 'title']);
+const defaultDir = (k: SortKey): 1 | -1 => (ASC_BY_DEFAULT.has(k) ? 1 : -1);
 const num = (v: number | null | undefined) => (v == null ? -Infinity : v);
+
+/** The filter state. It lives in the query string (?kind=indicator&verdict=YES&sub=trend&sort=updated&dir=asc), defaults omitted. */
+interface Filters {
+  kind: 'all' | Kind;
+  verdict: 'all' | VerdictWord;
+  sub: string;
+  sort: SortKey;
+  dir: 1 | -1;
+}
+
+function readFilters(sp: URLSearchParams): Filters {
+  const kind = sp.get('kind') as Kind | null;
+  const verdict = sp.get('verdict') as VerdictWord | null;
+  const sort = sp.get('sort') as SortKey | null;
+  const sortKey: SortKey = sort && (SORT_KEYS as readonly string[]).includes(sort) ? sort : 'verdict';
+  const dir = sp.get('dir');
+  return {
+    kind: kind && KINDS.includes(kind) ? kind : 'all',
+    verdict: verdict && VERDICTS.includes(verdict) ? verdict : 'all',
+    sub: sp.get('sub') ?? 'all',
+    sort: sortKey,
+    dir: dir === 'asc' ? 1 : dir === 'desc' ? -1 : defaultDir(sortKey),
+  };
+}
+
+function writeFilters(f: Filters) {
+  const p = new URLSearchParams();
+  if (f.kind !== 'all') p.set('kind', f.kind);
+  if (f.verdict !== 'all') p.set('verdict', f.verdict);
+  if (f.kind !== 'all' && f.sub !== 'all') p.set('sub', f.sub);
+  if (f.sort !== 'verdict') p.set('sort', f.sort);
+  if (f.dir !== defaultDir(f.sort)) p.set('dir', f.dir === 1 ? 'asc' : 'desc');
+  const q = p.toString();
+  window.history.replaceState(window.history.state, '', q ? `?${q}` : window.location.pathname);
+}
 
 /**
  * The list is fed by IndexViewService, which streams data/index_1.jsonl, index_2.jsonl, … and pushes the rows
  * read so far, so the first cards render before a large index finishes downloading. Filtering and sorting
- * happen in memory; VirtuosoGrid virtualises the DOM and `endReached` appends the next page of cards,
- * which keeps tens of thousands of scripts scrollable.
+ * happen in memory over the whole set; VirtuosoGrid renders only the cards in view, so tens of thousands of
+ * scripts stay scrollable. Subcategory chips come from the data, not from a fixed list.
  */
 export function RunsList() {
+  const sp = useSearchParams();
+  const [f, setF] = useState<Filters>(() => readFilters(new URLSearchParams(sp.toString())));
   const [all, setAll] = useState<IndexRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kind, setKind] = useState<'all' | Kind>('all');
-  const [verdict, setVerdict] = useState<'all' | VerdictWord>('all');
-  const [sub, setSub] = useState('all');
-  const [sortKey, setSortKey] = useState<SortKey>('verdict');
-  const [dir, setDir] = useState<1 | -1>(1);
-  const [limit, setLimit] = useState(PAGE);
 
   useEffect(() => {
     const svc = ioc.indexViewService;
@@ -38,51 +74,69 @@ export function RunsList() {
     return () => { unRows(); unDone(); };
   }, []);
 
+  const update = useCallback((patch: Partial<Filters>) => {
+    setF((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.kind !== undefined || patch.verdict !== undefined) next.sub = 'all';
+      if (patch.sort !== undefined && patch.dir === undefined) next.dir = defaultDir(patch.sort);
+      writeFilters(next);
+      return next;
+    });
+  }, []);
+
+  const { kind, verdict, sub, sort, dir } = f;
   const inScope = useCallback((r: IndexRow) => (kind === 'all' || r.kind === kind) && (verdict === 'all' || r.verdict === verdict), [kind, verdict]);
 
   const shown = useMemo(() => {
-    const f = all.filter((r) => inScope(r) && (sub === 'all' || r.subcategory === sub));
+    const rows = all.filter((r) => inScope(r) && (sub === 'all' || r.subcategory === sub));
     const cmp = (a: IndexRow, b: IndexRow) => {
-      switch (sortKey) {
+      switch (sort) {
         case 'verdict': return VERDICT_ORDER[a.verdict] - VERDICT_ORDER[b.verdict] || num(b.main) - num(a.main);
         case 'title': return a.title.localeCompare(b.title);
         case 'updated': return a.updated.localeCompare(b.updated);
         case 'expected': return num(a.expected?.[1]) - num(b.expected?.[1]);
-        default: return num(a[sortKey]) - num(b[sortKey]);
+        default: return num(a[sort]) - num(b[sort]);
       }
     };
-    return f.sort((a, b) => dir * cmp(a, b));
-  }, [all, inScope, sub, sortKey, dir]);
+    return rows.sort((a, b) => dir * cmp(a, b));
+  }, [all, inScope, sub, sort, dir]);
 
-  useEffect(() => { setLimit(PAGE); }, [kind, verdict, sub, sortKey, dir]);
-  const visible = useMemo(() => shown.slice(0, limit), [shown, limit]);
-  const loadMore = useCallback(() => setLimit((n) => (n < shown.length ? Math.min(n + PAGE, shown.length) : n)), [shown.length]);
-
-  const chips = useMemo(() => kind === 'all' ? [] : SUBCATS[kind].map(([key, label]) => {
-    const count = all.filter((r) => r.kind === kind && (verdict === 'all' || r.verdict === verdict) && r.subcategory === key).length;
-    return { key, label, count };
-  }), [all, kind, verdict]);
+  // Subcategories present in the data for the chosen kind (known keys first, in taxonomy order, then the rest
+  // alphabetically); counts respect the verdict filter, a chip with no matches is dimmed, not hidden.
+  const chips = useMemo(() => {
+    if (kind === 'all') return [];
+    const present = new Set<string>();
+    const counts = new Map<string, number>();
+    for (const r of all) {
+      if (r.kind !== kind || !r.subcategory) continue;
+      present.add(r.subcategory);
+      if (verdict === 'all' || r.verdict === verdict) counts.set(r.subcategory, (counts.get(r.subcategory) ?? 0) + 1);
+    }
+    const known = SUBCATS[kind].map(([key]) => key).filter((key) => present.has(key));
+    const rest = [...present].filter((key) => !known.includes(key)).sort();
+    return [...known, ...rest].map((key) => ({ key, label: subLabel(kind, key), count: counts.get(key) ?? 0 }));
+  }, [all, kind, verdict]);
 
   return (
     <>
       <div className="filters">
-        <select className="pill-select" value={kind} onChange={(e) => { setKind(e.target.value as 'all' | Kind); setSub('all'); }} aria-label="Type">
+        <select className="pill-select" value={kind} onChange={(e) => update({ kind: e.target.value as 'all' | Kind })} aria-label="Type">
           <option value="all">indicators and strategies</option><option value="indicator">indicators</option><option value="strategy">strategies</option>
         </select>
-        <select className="pill-select" value={verdict} onChange={(e) => { setVerdict(e.target.value as 'all' | VerdictWord); setSub('all'); }} aria-label="Verdict">
+        <select className="pill-select" value={verdict} onChange={(e) => update({ verdict: e.target.value as 'all' | VerdictWord })} aria-label="Verdict">
           <option value="all">any verdict</option><option value="YES">YES</option><option value="NO">NO</option><option value="UNKNOWN">UNKNOWN</option>
         </select>
-        <select className="pill-select dim" value={sortKey} onChange={(e) => { const k = e.target.value as SortKey; setSortKey(k); setDir(k === 'title' || k === 'verdict' ? 1 : -1); }} aria-label="Sort">
+        <select className="pill-select dim" value={sort} onChange={(e) => update({ sort: e.target.value as SortKey })} aria-label="Sort">
           <option value="verdict">sort: verdict</option><option value="main">sort: 12 months via alerts</option><option value="paper">sort: paper journal</option>
           <option value="expected">sort: expected per month</option><option value="updated">sort: updated</option><option value="title">sort: name</option>
         </select>
-        <button className="pill-btn mono" onClick={() => setDir((d) => (d === 1 ? -1 : 1))} title="sort direction" aria-label="sort direction">{dir === 1 ? '↑' : '↓'}</button>
+        <button className="pill-btn mono" onClick={() => update({ dir: dir === 1 ? -1 : 1 })} title="sort direction" aria-label="sort direction">{dir === 1 ? '↑' : '↓'}</button>
         <span className="count">{loading ? `loading… ${all.length}` : `${shown.length} of ${all.length}`}</span>
       </div>
       {chips.length > 0 && (
         <div className="chips">
           {chips.map((c) => (
-            <button key={c.key} className={`chip${sub === c.key ? ' on' : ''}${c.count ? '' : ' dim'}`} onClick={() => setSub(sub === c.key ? 'all' : c.key)}>
+            <button key={c.key} className={`chip${sub === c.key ? ' on' : ''}${c.count ? '' : ' dim'}`} onClick={() => update({ sub: sub === c.key ? 'all' : c.key })}>
               {c.label}{c.count ? ` ${c.count}` : ''}
             </button>
           ))}
@@ -90,9 +144,8 @@ export function RunsList() {
       )}
       <VirtuosoGrid
         useWindowScroll
-        data={visible}
-        overscan={600}
-        endReached={loadMore}
+        data={shown}
+        overscan={800}
         listClassName="cards"
         itemClassName="cards-item"
         computeItemKey={(_, row) => row.id}

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { RunsList } from '@/components/RunsList';
 
 export default function Home() {
@@ -7,7 +8,9 @@ export default function Home() {
         <h1>Scripts</h1>
         <p>one question: can money be made on this by trading its alerts</p>
       </div>
-      <RunsList />
+      <Suspense fallback={<div className="filters"><span className="count">loading…</span></div>}>
+        <RunsList />
+      </Suspense>
     </div>
   );
 }
