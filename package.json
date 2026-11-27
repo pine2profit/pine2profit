@@ -1,6 +1,6 @@
 {
   "name": "pine2profit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Can money be made on this? A static dashboard for an AI agent that loops over TradingView Pine Script indicators and strategies and reports whether trading their alerts makes money. Ships the site, a local preview server for the agent's data folder (plain GET, no API) and a strict validator of the data contract; the same files publish to GitHub Pages unchanged.",
   "keywords": [
     "pine-script",
@@ -32,6 +32,14 @@
     "cli",
     "typescript"
   ],
+  "homepage": "https://github.com/pine2profit/pine2profit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pine2profit/pine2profit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pine2profit/pine2profit/issues"
+  },
   "author": {
     "name": "Petr Tripolsky",
     "email": "tripolskypetr@gmail.com",
