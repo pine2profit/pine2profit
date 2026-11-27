@@ -1,6 +1,20 @@
-# pine2profit
+<img src="https://github.com/pine2profit/pine2profit/raw/refs/heads/main/assets/icon.svg" height="45px" align="right">
 
-A dashboard for reports on TradingView Pine Script indicators and strategies, answering one question per script: **can money be made on it by trading its alerts?** The package is the static site plus a local server that serves your `data/` folder to it.
+# 🌲 pine2profit
+
+> Can money be made on this? A dashboard for an agent that loops over TradingView Pine Script indicators and strategies and answers that one question per script by trading its alerts on paper. The package is the static site plus a local server that serves your `data/` folder to it — the same files go to GitHub Pages unchanged.
+
+![screenshot](https://raw.githubusercontent.com/pine2profit/pine2profit/HEAD/assets/screenshot.png)
+
+[![npm](https://img.shields.io/npm/v/pine2profit.svg?style=flat-square)](https://npmjs.org/package/pine2profit)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)]()
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)]()
+
+🐙 **[GitHub](https://github.com/pine2profit/pine2profit)** · 📖 **`npx pine2profit --help`** prints the data contract with JSON examples
+
+---
+
+## 🚀 Quick Start
 
 ```bash
 npx pine2profit <dir>            # dir = the folder that contains data/
