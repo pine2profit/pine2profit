@@ -1,4 +1,6 @@
+import { createReadStream } from "fs";
 import { readdir, readFile, stat } from "fs/promises";
+import { createInterface } from "readline";
 import path from "path";
 
 import { inject } from "../../core/di";
@@ -18,13 +20,13 @@ export interface DataIssue {
   message: string;
 }
 
-export interface DataReport {
+/** The return value of the validate() generator, available once every issue has been yielded. */
+export interface DataSummary {
   root: string;
   scripts: number;
   chunks: number;
   errors: number;
   warnings: number;
-  issues: DataIssue[];
 }
 
 const DATA_DIR = "data";
@@ -158,106 +160,167 @@ const typeError = (rule: Rule, v: unknown): string | null => {
   }
 };
 
-const join = (at: string | undefined, key: string) => (at ? `${at}.${key}` : key);
-
 /** Key order and formatting do not matter when comparing head with the index line. */
 const canonical = (v: unknown): string =>
   isPlainObject(v)
     ? `{${Object.keys(v).filter((k) => v[k] !== null && v[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
     : JSON.stringify(v);
 
+const error = (file: string, message: string, where: Partial<Where> = {}): DataIssue => ({ level: "error", file, message, ...where });
+const warning = (file: string, message: string, where: Partial<Where> = {}): DataIssue => ({ level: "warning", file, message, ...where });
+
+/** The shape of a JSON value against a schema; pure and small, so a plain array is returned. */
+const checkObject = (value: unknown, schema: Schema, where: Where): { ok: boolean; issues: DataIssue[] } => {
+  const issues: DataIssue[] = [];
+  const at = (): Partial<Where> => ({ line: where.line, at: where.at });
+  if (!isPlainObject(value)) {
+    issues.push(error(where.file, `must be an object, got ${describe(value)}`, at()));
+    return { ok: false, issues };
+  }
+  for (const [key, rule] of Object.entries(schema)) {
+    const v = value[key];
+    if (v === undefined || (v === null && !rule.nullable)) {
+      if (rule.required) issues.push(error(where.file, v === null ? `"${key}" is required and must not be null` : `"${key}" is required`, at()));
+      continue;
+    }
+    if (v === null) continue;
+    const problem = typeError(rule, v);
+    if (problem) {
+      issues.push(error(where.file, `"${key}" ${problem}`, at()));
+      continue;
+    }
+    if (rule.required && rule.type === "string" && !(v as string).trim()) {
+      issues.push(error(where.file, `"${key}" must not be empty`, at()));
+    }
+  }
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const key of Object.keys(value)) {
+    if (key in schema) continue;
+    const hit = Object.keys(schema).find((k) => norm(k) === norm(key));
+    issues.push(error(where.file, `unknown field "${key}"${hit ? ` (did you mean "${hit}"?)` : ""}`, at()));
+  }
+  return { ok: !issues.length, issues };
+};
+
+/** [[t:…]], [[range:…]], [[trade:N]] and [text](ref:…) must point at something the chart can show. */
+function* checkRefs(md: string, where: Where, tradeIds: Set<number> | null): Generator<DataIssue> {
+  for (const m of md.matchAll(CHART_REF)) {
+    const kind = m[1] ?? m[3];
+    const body = (m[2] ?? m[4]).trim();
+    const ref = m[0];
+    const at = { at: where.at };
+    if (kind === "t") {
+      const [ts, price] = body.split("@");
+      if (Number.isNaN(Date.parse(ts))) yield error(where.file, `${ref}: not a date (ISO 8601 expected)`, at);
+      if (price !== undefined && !Number.isFinite(Number(price))) yield error(where.file, `${ref}: the price after @ is not a number`, at);
+    } else if (kind === "range") {
+      const [a, b] = body.split("..");
+      const from = Date.parse(a), to = Date.parse(b ?? "");
+      if (Number.isNaN(from) || Number.isNaN(to)) yield error(where.file, `${ref}: expected two ISO 8601 dates joined with ".."`, at);
+      else if (from >= to) yield error(where.file, `${ref}: the range ends before it starts`, at);
+    } else {
+      const n = Number(body);
+      if (!Number.isInteger(n)) yield error(where.file, `${ref}: expected a trade id (integer)`, at);
+      else if (tradeIds && !tradeIds.has(n)) yield error(where.file, `${ref}: no trade with id ${n} in the candles file`, at);
+    }
+  }
+}
+
+/**
+ * Validates <root>/data against the contract and yields every problem the moment it is found:
+ * the index files are read line by line, the files of each script one script at a time, so memory
+ * holds one document at once whatever the size of the folder. The generator's return value is
+ * the summary (counts) once everything has been yielded.
+ */
 export class DataValidationService {
   private readonly loggerService = inject<LoggerService>(TYPES.loggerService);
 
-  /**
-   * Checks <root>/data against the contract: the index files, every script's files and their
-   * schemas, the chart references inside the markdown. Errors mean the site would show something
-   * wrong or nothing at all; warnings are things worth cleaning up.
-   */
-  public validate = async (root: string): Promise<DataReport> => {
+  public validate = async function* (this: DataValidationService, root: string): AsyncGenerator<DataIssue, DataSummary> {
     this.loggerService.log("dataValidationService validate", { root });
     const dir = path.resolve(root, DATA_DIR);
     const rel = (name: string) => path.join(DATA_DIR, name);
-    const issues: DataIssue[] = [];
-    const error = (file: string, message: string, where: Partial<Where> = {}) => issues.push({ level: "error", file, message, ...where });
-    const warning = (file: string, message: string, where: Partial<Where> = {}) => issues.push({ level: "warning", file, message, ...where });
-    const report = (): DataReport => ({
-      root,
-      scripts: 0,
-      chunks: 0,
-      errors: issues.filter((i) => i.level === "error").length,
-      warnings: issues.filter((i) => i.level === "warning").length,
-      issues,
-    });
+    const summary: DataSummary = { root, scripts: 0, chunks: 0, errors: 0, warnings: 0 };
+    const count = (issue: DataIssue) => {
+      if (issue.level === "error") summary.errors += 1;
+      else summary.warnings += 1;
+      return issue;
+    };
 
     // the folder
     let dirStat;
     try {
       dirStat = await stat(dir);
     } catch {
-      error(DATA_DIR, `folder not found: ${dir}`);
-      return report();
+      yield count(error(DATA_DIR, `folder not found: ${dir}`));
+      return summary;
     }
     if (!dirStat.isDirectory()) {
-      error(DATA_DIR, `is not a folder: ${dir}`);
-      return report();
+      yield count(error(DATA_DIR, `is not a folder: ${dir}`));
+      return summary;
     }
     const names = (await readdir(dir)).filter((n) => !n.startsWith("."));
+    const present = new Set(names);
 
     // index chunks: index_1 … index_N without gaps
     const chunks = names
       .map((n) => ({ name: n, n: Number(INDEX_FILE.exec(n)?.[1]) }))
       .filter((c) => Number.isInteger(c.n) && c.n >= 1)
       .sort((a, b) => a.n - b.n);
+    summary.chunks = chunks.length;
     if (!chunks.length) {
-      error(rel("index_1.jsonl"), "not found: the list is read from data/index_1.jsonl (an empty file is fine)");
+      yield count(error(rel("index_1.jsonl"), "not found: the list is read from data/index_1.jsonl (an empty file is fine)"));
     }
     for (let i = 0; i < chunks.length; i += 1) {
       const expected = i + 1;
       if (chunks[i].n !== expected) {
-        error(rel(`index_${expected}.jsonl`), `missing: the site stops at the first missing index file, so index_${chunks[i].n}.jsonl and later are never read`);
+        yield count(error(rel(`index_${expected}.jsonl`), `missing: the site stops at the first missing index file, so index_${chunks[i].n}.jsonl and later are never read`));
         break;
       }
     }
 
-    // index lines
-    const rows = new Map<string, Record<string, unknown>>();
+    // index lines, streamed; only the raw text of the last line per id is kept
+    const rows = new Map<string, string>();
     for (const chunk of chunks) {
       const file = rel(chunk.name);
-      const text = await readFile(path.join(dir, chunk.name), "utf8");
-      const lines = text.split("\n");
-      lines.forEach((raw, idx) => {
-        const line = idx + 1;
+      const lines = createInterface({ input: createReadStream(path.join(dir, chunk.name), "utf8"), crlfDelay: Infinity });
+      let line = 0;
+      for await (const raw of lines) {
+        line += 1;
         const l = raw.trim();
-        if (!l) return;
+        if (!l) continue;
         let obj: unknown;
         try {
           obj = JSON.parse(l);
         } catch (e) {
-          error(file, `not valid JSON: ${(e as Error).message}`, { line });
-          return;
+          yield count(error(file, `not valid JSON: ${(e as Error).message}`, { line }));
+          continue;
         }
-        const before = issues.length;
-        this.checkObject(obj, INDEX_LINE, { file, line }, error);
-        if (issues.length === before && isPlainObject(obj)) {
-          rows.set(obj.id as string, obj);
-        }
-      });
+        const check = checkObject(obj, INDEX_LINE, { file, line });
+        for (const issue of check.issues) yield count(issue);
+        if (check.ok) rows.set((obj as { id: string }).id, l);
+      }
     }
+    summary.scripts = rows.size;
 
-    // every script's files
+    // every script's files, one script at a time
     const known = new Set<string>();
-    for (const [id, row] of rows) {
+    for (const [id, raw] of rows) {
+      const row = JSON.parse(raw) as Record<string, unknown>;
       const messagesName = `${id}_messages.json`;
       const candlesName = `${id}_candles.json`;
       const pinescriptName = `${id}_pinescript.json`;
       known.add(messagesName); known.add(candlesName); known.add(pinescriptName);
 
-      const tradeIds = await this.checkCandles(dir, rel(candlesName), names.includes(candlesName), error, warning);
-      await this.checkMessages(dir, rel(messagesName), names.includes(messagesName), id, row, tradeIds, error, warning);
-      if (names.includes(pinescriptName)) {
-        const doc = await this.readJson(dir, rel(pinescriptName), error);
-        if (doc !== undefined) this.checkObject(doc, PINESCRIPT_FILE, { file: rel(pinescriptName) }, error);
+      let tradeIds: Set<number> | null = null;
+      for await (const item of this.checkCandles(dir, rel(candlesName), present.has(candlesName))) {
+        if (item instanceof Set) tradeIds = item;
+        else yield count(item);
+      }
+      for await (const issue of this.checkMessages(dir, rel(messagesName), present.has(messagesName), id, row, tradeIds)) yield count(issue);
+      if (present.has(pinescriptName)) {
+        const doc = await this.readJson(dir, pinescriptName);
+        if (doc.issue) yield count(doc.issue);
+        else for (const issue of checkObject(doc.value, PINESCRIPT_FILE, { file: rel(pinescriptName) }).issues) yield count(issue);
       }
     }
 
@@ -265,167 +328,101 @@ export class DataValidationService {
     for (const name of names) {
       if (INDEX_FILE.test(name) || known.has(name)) continue;
       const m = SCRIPT_FILE.exec(name);
-      if (m) warning(rel(name), `no index line with id "${m[1]}": the file is never shown`);
-      else warning(rel(name), "unexpected file: the site only reads index_N.jsonl and <id>_messages|candles|pinescript.json");
+      yield count(m
+        ? warning(rel(name), `no index line with id "${m[1]}": the file is never shown`)
+        : warning(rel(name), "unexpected file: the site only reads index_N.jsonl and <id>_messages|candles|pinescript.json"));
     }
 
-    const result = report();
-    result.scripts = rows.size;
-    result.chunks = chunks.length;
-    return result;
+    return summary;
   };
 
-  private readJson = async (dir: string, file: string, error: (file: string, message: string, where?: Partial<Where>) => void): Promise<unknown> => {
-    const text = await readFile(path.join(dir, path.basename(file)), "utf8");
+  private readJson = async (dir: string, name: string): Promise<{ value?: unknown; issue?: DataIssue }> => {
+    const text = await readFile(path.join(dir, name), "utf8");
     try {
-      return JSON.parse(text);
+      return { value: JSON.parse(text) };
     } catch (e) {
-      error(file, `not valid JSON: ${(e as Error).message}`);
-      return undefined;
+      return { issue: error(path.join(DATA_DIR, name), `not valid JSON: ${(e as Error).message}`) };
     }
   };
 
-  private checkObject = (
-    value: unknown,
-    schema: Schema,
-    where: Where,
-    error: (file: string, message: string, where?: Partial<Where>) => void,
-  ): boolean => {
-    if (!isPlainObject(value)) {
-      error(where.file, `must be an object, got ${describe(value)}`, { line: where.line, at: where.at });
-      return false;
-    }
-    let ok = true;
-    for (const [key, rule] of Object.entries(schema)) {
-      const v = value[key];
-      const at = join(where.at, key);
-      if (v === undefined || (v === null && !rule.nullable)) {
-        if (rule.required) {
-          error(where.file, v === null ? `"${key}" is required and must not be null` : `"${key}" is required`, { line: where.line, at: where.at });
-          ok = false;
-        }
-        continue;
-      }
-      if (v === null) continue;
-      const problem = typeError(rule, v);
-      if (problem) {
-        error(where.file, `"${key}" ${problem}`, { line: where.line, at: where.at });
-        ok = false;
-        continue;
-      }
-      if (rule.required && rule.type === "string" && !(v as string).trim()) {
-        error(where.file, `"${key}" must not be empty`, { line: where.line, at: where.at });
-        ok = false;
-      }
-      void at;
-    }
-    for (const key of Object.keys(value)) {
-      if (!(key in schema)) {
-        error(where.file, `unknown field "${key}"${this.suggest(key, schema)}`, { line: where.line, at: where.at });
-        ok = false;
-      }
-    }
-    return ok;
-  };
-
-  /** "tv_url" → ' (did you mean "tvUrl"?)' */
-  private suggest = (key: string, schema: Schema) => {
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const hit = Object.keys(schema).find((k) => norm(k) === norm(key));
-    return hit ? ` (did you mean "${hit}"?)` : "";
-  };
-
-  private checkCandles = async (
-    dir: string,
-    file: string,
-    exists: boolean,
-    error: (file: string, message: string, where?: Partial<Where>) => void,
-    warning: (file: string, message: string, where?: Partial<Where>) => void,
-  ): Promise<Set<number> | null> => {
+  /** Yields issues, and the set of trade ids as the last item when the file is usable. */
+  private checkCandles = async function* (this: DataValidationService, dir: string, file: string, exists: boolean): AsyncGenerator<DataIssue | Set<number>> {
     if (!exists) {
-      error(file, "not found: every script needs its candles file (bars for the chart)");
-      return null;
-    }
-    const doc = await this.readJson(dir, file, error);
-    if (doc === undefined) return null;
-    if (!this.checkObject(doc, CANDLES_FILE, { file }, error)) return null;
-    const d = doc as { bars: unknown[]; trades?: unknown[]; equity?: unknown[] };
-    if (!d.bars.length) error(file, '"bars" must not be empty', { at: "bars" });
-    let prev = -Infinity;
-    d.bars.forEach((bar, i) => {
-      if (!this.checkObject(bar, BAR, { file, at: `bars[${i}]` }, error)) return;
-      const b = bar as { time: number; high: number; low: number };
-      if (b.time <= prev) error(file, `"time" must grow from bar to bar (got ${b.time} after ${prev})`, { at: `bars[${i}]` });
-      if (b.high < b.low) error(file, `"high" is below "low"`, { at: `bars[${i}]` });
-      prev = b.time;
-    });
-    const tradeIds = new Set<number>();
-    (d.trades ?? []).forEach((trade, i) => {
-      if (!this.checkObject(trade, TRADE, { file, at: `trades[${i}]` }, error)) return;
-      const t = trade as { id: number; open_time: number; close_time: number | null };
-      if (tradeIds.has(t.id)) error(file, `"id" ${t.id} is used twice`, { at: `trades[${i}]` });
-      tradeIds.add(t.id);
-      if (t.close_time != null && t.close_time < t.open_time) error(file, `"close_time" is before "open_time"`, { at: `trades[${i}]` });
-    });
-    (d.equity ?? []).forEach((point, i) => this.checkObject(point, EQUITY, { file, at: `equity[${i}]` }, error));
-    if (d.equity && d.equity.length === 1) warning(file, '"equity" has a single point: the P&L line needs at least two', { at: "equity" });
-    return tradeIds;
-  };
-
-  private checkMessages = async (
-    dir: string,
-    file: string,
-    exists: boolean,
-    id: string,
-    row: Record<string, unknown>,
-    tradeIds: Set<number> | null,
-    error: (file: string, message: string, where?: Partial<Where>) => void,
-    warning: (file: string, message: string, where?: Partial<Where>) => void,
-  ) => {
-    if (!exists) {
-      error(file, "not found: every script needs its messages file (the report text)");
+      yield error(file, "not found: every script needs its candles file (bars for the chart)");
       return;
     }
-    const doc = await this.readJson(dir, file, error);
-    if (doc === undefined) return;
-    if (!this.checkObject(doc, MESSAGES_FILE, { file }, error)) return;
-    const d = doc as { head?: Record<string, unknown>; groups?: unknown[]; messages: unknown[] };
-    if (d.head !== undefined && this.checkObject(d.head, INDEX_LINE, { file, at: "head" }, error)) {
-      if (d.head.id !== id) error(file, `"id" is "${d.head.id}" but the file belongs to "${id}"`, { at: "head" });
-      else if (canonical(d.head) !== canonical(row)) {
-        const diff = [...new Set([...Object.keys(d.head), ...Object.keys(row)])].filter((k) => canonical(d.head![k]) !== canonical(row[k]));
-        error(file, `differs from the index line in ${diff.map((k) => `"${k}"`).join(", ")}: copy the index line as is`, { at: "head" });
-      }
+    const doc = await this.readJson(dir, path.basename(file));
+    if (doc.issue) {
+      yield doc.issue;
+      return;
     }
-    if (d.head === undefined) warning(file, '"head" is missing: a direct link to /run/?id=' + id + " has to scan the index first");
-    (d.groups ?? []).forEach((g, i) => this.checkObject(g, GROUP, { file, at: `groups[${i}]` }, error));
-    if (!d.messages.length) warning(file, '"messages" is empty: the page shows no text', { at: "messages" });
-    d.messages.forEach((m, i) => {
-      if (!this.checkObject(m, MESSAGE, { file, at: `messages[${i}]` }, error)) return;
-      this.checkRefs((m as { md: string }).md, { file, at: `messages[${i}].md` }, tradeIds, error);
-    });
+    const top = checkObject(doc.value, CANDLES_FILE, { file });
+    yield* top.issues;
+    if (!top.ok) return;
+    const d = doc.value as { bars: unknown[]; trades?: unknown[]; equity?: unknown[] };
+    if (!d.bars.length) yield error(file, '"bars" must not be empty', { at: "bars" });
+    let prev = -Infinity;
+    for (let i = 0; i < d.bars.length; i += 1) {
+      const check = checkObject(d.bars[i], BAR, { file, at: `bars[${i}]` });
+      yield* check.issues;
+      if (!check.ok) continue;
+      const b = d.bars[i] as { time: number; high: number; low: number };
+      if (b.time <= prev) yield error(file, `"time" must grow from bar to bar (got ${b.time} after ${prev})`, { at: `bars[${i}]` });
+      if (b.high < b.low) yield error(file, `"high" is below "low"`, { at: `bars[${i}]` });
+      prev = b.time;
+    }
+    const tradeIds = new Set<number>();
+    const trades = d.trades ?? [];
+    for (let i = 0; i < trades.length; i += 1) {
+      const check = checkObject(trades[i], TRADE, { file, at: `trades[${i}]` });
+      yield* check.issues;
+      if (!check.ok) continue;
+      const t = trades[i] as { id: number; open_time: number; close_time: number | null };
+      if (tradeIds.has(t.id)) yield error(file, `"id" ${t.id} is used twice`, { at: `trades[${i}]` });
+      tradeIds.add(t.id);
+      if (t.close_time != null && t.close_time < t.open_time) yield error(file, `"close_time" is before "open_time"`, { at: `trades[${i}]` });
+    }
+    const equity = d.equity ?? [];
+    for (let i = 0; i < equity.length; i += 1) yield* checkObject(equity[i], EQUITY, { file, at: `equity[${i}]` }).issues;
+    if (d.equity && d.equity.length === 1) yield warning(file, '"equity" has a single point: the P&L line needs at least two', { at: "equity" });
+    yield tradeIds;
   };
 
-  /** [[t:…]], [[range:…]], [[trade:N]] and [text](ref:…) must point at something the chart can show. */
-  private checkRefs = (md: string, where: Where, tradeIds: Set<number> | null, error: (file: string, message: string, where?: Partial<Where>) => void) => {
-    for (const m of md.matchAll(CHART_REF)) {
-      const kind = m[1] ?? m[3];
-      const body = (m[2] ?? m[4]).trim();
-      const ref = m[0];
-      if (kind === "t") {
-        const [ts, price] = body.split("@");
-        if (Number.isNaN(Date.parse(ts))) error(where.file, `${ref}: not a date (ISO 8601 expected)`, { at: where.at });
-        if (price !== undefined && !Number.isFinite(Number(price))) error(where.file, `${ref}: the price after @ is not a number`, { at: where.at });
-      } else if (kind === "range") {
-        const [a, b] = body.split("..");
-        const from = Date.parse(a), to = Date.parse(b ?? "");
-        if (Number.isNaN(from) || Number.isNaN(to)) error(where.file, `${ref}: expected two ISO 8601 dates joined with ".."`, { at: where.at });
-        else if (from >= to) error(where.file, `${ref}: the range ends before it starts`, { at: where.at });
-      } else {
-        const n = Number(body);
-        if (!Number.isInteger(n)) error(where.file, `${ref}: expected a trade id (integer)`, { at: where.at });
-        else if (tradeIds && !tradeIds.has(n)) error(where.file, `${ref}: no trade with id ${n} in the candles file`, { at: where.at });
+  private checkMessages = async function* (this: DataValidationService, dir: string, file: string, exists: boolean, id: string, row: Record<string, unknown>, tradeIds: Set<number> | null): AsyncGenerator<DataIssue> {
+    if (!exists) {
+      yield error(file, "not found: every script needs its messages file (the report text)");
+      return;
+    }
+    const doc = await this.readJson(dir, path.basename(file));
+    if (doc.issue) {
+      yield doc.issue;
+      return;
+    }
+    const top = checkObject(doc.value, MESSAGES_FILE, { file });
+    yield* top.issues;
+    if (!top.ok) return;
+    const d = doc.value as { head?: Record<string, unknown>; groups?: unknown[]; messages: unknown[] };
+    if (d.head !== undefined) {
+      const check = checkObject(d.head, INDEX_LINE, { file, at: "head" });
+      yield* check.issues;
+      if (check.ok) {
+        if (d.head.id !== id) yield error(file, `"id" is "${d.head.id}" but the file belongs to "${id}"`, { at: "head" });
+        else if (canonical(d.head) !== canonical(row)) {
+          const diff = [...new Set([...Object.keys(d.head), ...Object.keys(row)])].filter((k) => canonical(d.head![k]) !== canonical(row[k]));
+          yield error(file, `differs from the index line in ${diff.map((k) => `"${k}"`).join(", ")}: copy the index line as is`, { at: "head" });
+        }
       }
+    } else {
+      yield warning(file, `"head" is missing: a direct link to /run/?id=${id} has to scan the index first`);
+    }
+    const groups = d.groups ?? [];
+    for (let i = 0; i < groups.length; i += 1) yield* checkObject(groups[i], GROUP, { file, at: `groups[${i}]` }).issues;
+    if (!d.messages.length) yield warning(file, '"messages" is empty: the page shows no text', { at: "messages" });
+    for (let i = 0; i < d.messages.length; i += 1) {
+      const check = checkObject(d.messages[i], MESSAGE, { file, at: `messages[${i}]` });
+      yield* check.issues;
+      if (!check.ok) continue;
+      yield* checkRefs((d.messages[i] as { md: string }).md, { file, at: `messages[${i}].md` }, tradeIds);
     }
   };
 }

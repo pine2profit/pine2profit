@@ -13,4 +13,4 @@ export { ioc as lib } from "./lib";
 
 export type { ILogger } from "./interface/Logger.interface";
 export type { Config } from "./config/params";
-export type { DataIssue, DataReport, IssueLevel } from "./lib/services/validation/DataValidationService";
+export type { DataIssue, DataSummary, IssueLevel } from "./lib/services/validation/DataValidationService";

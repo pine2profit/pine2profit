@@ -29,34 +29,36 @@ interface DataIssue {
     at?: string;
     message: string;
 }
-interface DataReport {
+/** The return value of the validate() generator, available once every issue has been yielded. */
+interface DataSummary {
     root: string;
     scripts: number;
     chunks: number;
     errors: number;
     warnings: number;
-    issues: DataIssue[];
 }
+/**
+ * Validates <root>/data against the contract and yields every problem the moment it is found:
+ * the index files are read line by line, the files of each script one script at a time, so memory
+ * holds one document at once whatever the size of the folder. The generator's return value is
+ * the summary (counts) once everything has been yielded.
+ */
 declare class DataValidationService {
     private readonly loggerService;
-    /**
-     * Checks <root>/data against the contract: the index files, every script's files and their
-     * schemas, the chart references inside the markdown. Errors mean the site would show something
-     * wrong or nothing at all; warnings are things worth cleaning up.
-     */
-    validate: (root: string) => Promise<DataReport>;
+    validate: (this: DataValidationService, root: string) => AsyncGenerator<DataIssue, DataSummary>;
     private readJson;
-    private checkObject;
-    /** "tv_url" → ' (did you mean "tvUrl"?)' */
-    private suggest;
+    /** Yields issues, and the set of trade ids as the last item when the file is usable. */
     private checkCandles;
     private checkMessages;
-    /** [[t:…]], [[range:…]], [[trade:N]] and [text](ref:…) must point at something the chart can show. */
-    private checkRefs;
 }
 
-/** Checks <root>/data against the contract and returns every problem found. */
-declare function validate(root: string): Promise<DataReport>;
+/**
+ * Checks <root>/data against the contract. Yields each problem as soon as it is found; the
+ * generator's return value is the summary. Consume it with `for await`, or step with next()
+ * when the summary is needed:
+ *   const it = validate(root); let r; while (!(r = await it.next()).done) report(r.value); const summary = r.value;
+ */
+declare function validate(root: string): AsyncGenerator<DataIssue, DataSummary>;
 
 declare const GLOBAL_CONFIG: {
     CC_WWWROOT_PATH: string;
@@ -119,4 +121,4 @@ declare const ioc: {
     loggerService: LoggerService;
 };
 
-export { type Config, type DataIssue, type DataReport, type ILogger, type IssueLevel, getConfig, getPublicPath, getRouter, ioc as lib, serve, setConfig, setLogger, validate };
+export { type Config, type DataIssue, type DataSummary, type ILogger, type IssueLevel, getConfig, getPublicPath, getRouter, ioc as lib, serve, setConfig, setLogger, validate };

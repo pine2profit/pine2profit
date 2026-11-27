@@ -226,7 +226,9 @@ No file at all: the page says "no candles for this script" and the text still re
 ```ts
 import { serve, validate, setLogger, setConfig } from "pine2profit";
 
-const report = await validate("/path/to/project");            // { errors, warnings, issues: [{ level, file, line?, at?, message }] }
+for await (const issue of validate("/path/to/project")) {    // yields { level, file, line?, at?, message } as problems are found;
+  console.log(issue);                                         // the folder is read one file at a time, whatever its size
+}
 const dispose = serve("0.0.0.0", 60050, "/path/to/project");  // serves /path/to/project/data; serve() itself does not validate
 ```
 
