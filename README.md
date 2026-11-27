@@ -1,12 +1,35 @@
 # pine2profit
 
-A dashboard for reports on TradingView Pine Script indicators and strategies, answering one question per script: **can money be made on it by trading its alerts?** The package is the static site plus a local server that serves your `data/` folder to it. Who writes `data/` — an agent, a script, you by hand — is outside the package; the contract is below.
+A dashboard for reports on TradingView Pine Script indicators and strategies, answering one question per script: **can money be made on it by trading its alerts?** The package is the static site plus a local server that serves your `data/` folder to it.
 
 ```bash
 npx pine2profit <dir>            # dir = the folder that contains data/
 ```
 
 Open http://localhost:60050. The site reads everything with plain `GET` from `data/`, so a data folder that works here works on GitHub Pages unchanged.
+
+## Filling the site with an agent
+
+The package does not write `data/`. It is built so that an AI agent running in a loop can: the contract is a few flat files, and the server picks up every change on the next request (`Cache-Control: no-store`). A typical setup with Claude Code:
+
+1. **Start the preview** in the project folder and leave it running:
+
+   ```bash
+   mkdir -p project/data && npx pine2profit ./project
+   ```
+
+2. **Give the agent the contract.** `npx pine2profit --help` prints it with JSON examples; paste the output into the agent's system prompt or `CLAUDE.md`, together with the question it has to answer for every script and the rule for writing the report. The agent needs to know four things:
+
+   - every script is an `id` (`[a-z0-9-]+`) and up to three files `data/<id>_messages.json`, `data/<id>_candles.json`, `data/<id>_pinescript.json`;
+   - one line per script is appended to the last `data/index_N.jsonl`; a later line with the same `id` replaces the earlier one, so an update is an append, never a rewrite;
+   - the report is markdown in `messages`; every claim about the chart carries a reference (`[[t:…]]`, `[[range:…]]`, `[[trade:N]]`) so the reader can click and see the bars;
+   - `head` in `_messages.json` repeats the index line.
+
+3. **Run the loop.** Each iteration: pick a script, run the backtest / paper check, write or update the three files, append the index line. The agent can open http://localhost:60050/run/?id=<id> itself (or screenshot it) to check that the page renders what it wrote. Nothing has to be restarted.
+
+4. **Publish.** Commit `data/` next to the site build and push: GitHub Pages serves the same relative paths as the local server, so what the agent checked locally is what goes live.
+
+For a long-running loop keep `index_N.jsonl` chunks around 1000 lines and start `index_{N+1}` when the last one is full; the site reads them in order and stops at the first missing file.
 
 ## CLI
 
