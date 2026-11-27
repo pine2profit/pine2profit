@@ -141,7 +141,7 @@ index_N.jsonl (one line per script):
       { "code": "E", "title": "Iterations" }
     ],
     "messages": [
-      { "code": "A0", "title": "How to run it", "md": "Run it on **1h**. A typical trade: [[trade:137]]." },
+      { "code": "A0", "title": "How to run it", "md": "Run it on **1h**. A typical trade: [[trade:1]]." },
       { "code": "C2", "title": "The last 12 months", "md": "Window [[range:2025-11-12T00:00Z..2026-11-12T00:00Z]]: 97 trades, -$2,465." },
       { "code": "E1", "title": "What happened since the previous iteration?", "md": "Three paper trades, +$461.", "iteration": 3, "date": "2026-11-26" },
       { "code": "E1", "title": "What happened since the previous iteration?", "md": "First week on paper.", "iteration": 2, "date": "2026-11-19" }

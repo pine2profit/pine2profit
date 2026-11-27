@@ -135,14 +135,14 @@ A script that is not tradeable:
 
 ```json
 {
-  "head": { "id": "sma-cross-20-50", "title": "SMA Cross 20/50", "kind": "strategy", "verdict": "NO", "updated": "2026-11-26", "…": "the same fields as the index line" },
+  "head": {"id":"sma-cross-20-50","title":"SMA Cross 20/50","kind":"strategy","subcategory":"trend-following","verdict":"NO","main":-2465,"paper":461,"paperTrades":3,"expected":[-599,181],"iterations":3,"updated":"2026-11-26","market":"BTCUSDT","timeframe":"1h","license":"MPL-2.0","author":"example_author","tvUrl":"https://www.tradingview.com/script/EXAMPLE02/","cycleStart":"2026-11-12","percentile":59,"reason":"12 months −$2,465; only 4/10 markets positive; not better than random entries (59th percentile)"},
   "groups": [
     { "code": "A", "title": "What it is" },
     { "code": "C", "title": "Money" },
     { "code": "E", "title": "Iterations" }
   ],
   "messages": [
-    { "code": "A0", "title": "How to run it", "md": "Run it on **1h**. A typical trade: [[trade:137]]." },
+    { "code": "A0", "title": "How to run it", "md": "Run it on **1h**. A typical trade: [[trade:1]]." },
     { "code": "C2", "title": "The last 12 months", "md": "Window [[range:2025-11-12T00:00Z..2026-11-12T00:00Z]]: 97 trades, -$2,465." },
     { "code": "E1", "title": "What happened since the previous iteration?", "md": "Three paper trades, +$461.", "iteration": 3, "date": "2026-11-26" },
     { "code": "E1", "title": "What happened since the previous iteration?", "md": "First week on paper.", "iteration": 2, "date": "2026-11-19" }
