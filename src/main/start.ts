@@ -103,7 +103,7 @@ export const main = async () => {
     if (error) {
       process.exit(1);
     }
-    console.log(`Serving ${path.join(root, "data")} at http://localhost:${CC_WWWROOT_PORT}/data/`);
+    console.log(`Serving ${path.join(root, "data")} at http://localhost:${CC_WWWROOT_PORT}/`);
   });
 
   const beforeExit = () => {
