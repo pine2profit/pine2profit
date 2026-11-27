@@ -1,0 +1,25 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © example_author
+//@version=5
+indicator("Volume Pressure Delta", shorttitle="VPD", overlay=false, format=format.volume)
+len = input.int(20, "Smoothing", minval=1)
+varip float buyVol  = 0.0
+varip float sellVol = 0.0
+varip float prevVol = 0.0
+if barstate.isnew
+    buyVol  := 0.0
+    sellVol := 0.0
+    prevVol := 0.0
+tickVol = volume - prevVol
+if close >= close[1]
+    buyVol += tickVol
+else
+    sellVol += tickVol
+prevVol := volume
+delta  = buyVol - sellVol
+smooth = ta.sma(delta, len)
+plot(delta, "Delta", style=plot.style_columns, color=delta >= 0 ? color.new(color.teal, 30) : color.new(color.orange, 30))
+plot(smooth, "Smoothed", color=color.blue, linewidth=2)
+hline(0)
+alertcondition(ta.crossover(smooth, 0), "Pressure turns positive", "Smoothed delta crossed above zero")
+alertcondition(ta.crossunder(smooth, 0), "Pressure turns negative", "Smoothed delta crossed below zero")

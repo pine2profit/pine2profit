@@ -1,0 +1,20 @@
+{
+  "title": "EMA Ribbon Trend",
+  "author": "example_author",
+  "tv_url": "https://www.tradingview.com/script/EXAMPLE01/",
+  "kind": "indicator",
+  "market": "BTCUSDT",
+  "timeframe": "1h",
+  "license": "MPL-2.0",
+  "source_sha256": "91bbfa7512ddae51c2826176ac9eaf95cd14ca68cdbc5a9ae003778b9a814428",
+  "created": "2026-11-12",
+  "updated": "2026-11-26",
+  "cycle_start": "2026-11-12T00:00:00Z",
+  "synthetic": true,
+  "synthetic_note": "Example on synthetic bars. Every number is computed on these bars, but this is not a market.",
+  "rule": "Long on the \"ribbon turns bullish\" signal (EMA 8 > 21 > 55 on a closed bar), filled at the next bar's open; exit on \"ribbon turns bearish\" (8 < 21 < 55), at the next bar's open. No shorts.",
+  "rule_entry": "bull and not bull[1]",
+  "rule_exit": "bear and not bear[1]",
+  "category": "indicator",
+  "subcategory": "trend"
+}

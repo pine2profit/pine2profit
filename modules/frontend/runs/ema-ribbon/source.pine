@@ -1,0 +1,18 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © example_author
+//@version=5
+indicator("EMA Ribbon Trend", shorttitle="Ribbon", overlay=true)
+fast = input.int(8, "Fast EMA", minval=1)
+mid  = input.int(21, "Mid EMA", minval=1)
+slow = input.int(55, "Slow EMA", minval=1)
+e1 = ta.ema(close, fast)
+e2 = ta.ema(close, mid)
+e3 = ta.ema(close, slow)
+bull = e1 > e2 and e2 > e3
+bear = e1 < e2 and e2 < e3
+plot(e1, "Fast", color=color.new(color.teal, 0))
+plot(e2, "Mid", color=color.new(color.blue, 0))
+plot(e3, "Slow", color=color.new(color.orange, 0), linewidth=2)
+bgcolor(bull ? color.new(color.teal, 90) : bear ? color.new(color.orange, 90) : na)
+alertcondition(bull and not bull[1], "Ribbon turns bullish", "EMA ribbon aligned bullish")
+alertcondition(bear and not bear[1], "Ribbon turns bearish", "EMA ribbon aligned bearish")

@@ -1,0 +1,14 @@
+{
+  "verdict": "NO",
+  "reason": "12 months −$3,419; only 4/10 markets positive; not better than random entries (59th percentile)",
+  "expected_month_usd": [
+    -682,
+    129
+  ],
+  "confidence": null,
+  "main_number_usd": -3418.71,
+  "paper_pnl_usd": 185.49,
+  "paper_trades": 2,
+  "iterations": 3,
+  "updated": "2026-11-26"
+}
