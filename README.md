@@ -12,7 +12,8 @@ on them by trading their alerts. This repo is the site that shows its reports an
 ```bash
 npm install
 npm start                      # builds modules/frontend, copies it into build/, serves ./data on http://localhost:60050
-npx pine2profit [dir] --port 60050 --host 0.0.0.0   # dir = folder that contains data/ (default: cwd)
+npx pine2profit <dir> --port 60050 --host 0.0.0.0   # dir = folder that contains data/, required
+npx pine2profit --help                              # the data contract with JSON examples
 ```
 
 ## data/ — the contract
