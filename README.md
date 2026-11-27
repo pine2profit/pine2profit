@@ -29,7 +29,7 @@ The package does not write `data/`. It is built so that an AI agent running in a
 1. **Start the preview** in the project folder and leave it running:
 
    ```bash
-   mkdir -p project/data && touch project/data/index_1.jsonl && npx pine2profit ./project
+   mkdir -p project/data && npx pine2profit ./project
    ```
 
    An empty `index_1.jsonl` is a valid start. The folder is checked on every start and a single error refuses to start, so the agent never looks at a page that silently shows something wrong.
