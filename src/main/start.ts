@@ -84,11 +84,18 @@ export const main = async () => {
     }
     shown += 1;
   }
+  const dataDir = path.join(root, "data");
+  const counts = `${summary.scripts} script${summary.scripts === 1 ? "" : "s"} in ${summary.chunks} index file${summary.chunks === 1 ? "" : "s"}${summary.warnings ? `, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"}` : ""}`;
   if (summary.errors) {
-    console.error(`\n${summary.errors} error${summary.errors === 1 ? "" : "s"} in ${path.join(root, "data")}: refusing to start. Run with --help for the data contract.`);
+    console.error(`\n${summary.errors} error${summary.errors === 1 ? "" : "s"} in ${dataDir}: ${values.check ? "the folder is not valid" : "refusing to start"}. Run with --help for the data contract.`);
     process.exit(1);
   }
-  console.log(`data: ${summary.scripts} script${summary.scripts === 1 ? "" : "s"} in ${summary.chunks} index file${summary.chunks === 1 ? "" : "s"}${summary.warnings ? `, ${summary.warnings} warning${summary.warnings === 1 ? "" : "s"}` : ""}`);
+  if (values.check) {
+    // --check: the same validation as before every start, without starting the server
+    console.log(`${dataDir}: no errors, ${counts}`);
+    process.exit(0);
+  }
+  console.log(`data: ${counts}`);
 
   const { CC_WWWROOT_HOST, CC_WWWROOT_PORT } = getConfig();
 

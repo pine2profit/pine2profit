@@ -13,6 +13,10 @@ export const getArgs = singleshot(() => {
         type: "string",
         default: "",
       },
+      check: {
+        type: "boolean",
+        default: false,
+      },
       help: {
         type: "boolean",
         default: false,

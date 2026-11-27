@@ -41,7 +41,7 @@ The package does not write `data/`. It is built so that an AI agent running in a
    - the report is markdown in `messages`; every claim about the chart carries a reference (`[[t:…]]`, `[[range:…]]`, `[[trade:N]]`) so the reader can click and see the bars;
    - `head` in `_messages.json` repeats the index line.
 
-3. **Run the loop.** Each iteration: pick a script, run the backtest / paper check, write or update the three files, append the index line. The agent can open http://localhost:60050/run/?id=<id> itself (or screenshot it) to check that the page renders what it wrote. Nothing has to be restarted.
+3. **Run the loop.** Each iteration: pick a script, run the backtest / paper check, write or update the three files, append the index line, run `npx pine2profit ./project --check` and fix what it reports. The agent can open http://localhost:60050/run/?id=<id> itself (or screenshot it) to check that the page renders what it wrote. Nothing has to be restarted.
 
 4. **Publish.** Commit `data/` next to the site build and push: GitHub Pages serves the same relative paths as the local server, so what the agent checked locally is what goes live.
 
@@ -53,6 +53,7 @@ For a long-running loop keep `index_N.jsonl` chunks around 1000 lines and start 
 npx pine2profit .
 npx pine2profit ./project --port 8080
 npx pine2profit /var/agent/project --host 127.0.0.1 --port 60050
+npx pine2profit ./project --check      # validate only, no server
 npx pine2profit --help                 # the data contract with JSON examples
 ```
 
@@ -60,6 +61,7 @@ npx pine2profit --help                 # the data contract with JSON examples
 |---|---|---|
 | `--port <number>` | `CC_WWWROOT_PORT` or `60050` | HTTP port |
 | `--host <string>` | `CC_WWWROOT_HOST` or `0.0.0.0` | bind address |
+| `--check` | | validate `<dir>/data` and exit (0 = no errors, 1 = errors) without starting the server |
 | `--help`, `--version` | | |
 
 The server answers two things and nothing else — no API, no POST:
@@ -69,7 +71,7 @@ The server answers two things and nothing else — no API, no POST:
 
 ### Startup check
 
-Before listening, `<dir>/data` is validated against the contract below. A single error refuses to start with exit code 1 and the list of problems (`file:line` for the index, `file  path` inside JSON documents, at most 50 shown); warnings are printed and the server starts anyway.
+Before listening, `<dir>/data` is validated against the contract below; `--check` runs the same validation on its own and exits, which is what the agent should call after every write. A single error refuses to start with exit code 1 and the list of problems (`file:line` for the index, `file  path` inside JSON documents, at most 50 shown); warnings are printed and the server starts anyway.
 
 | checked | error |
 |---|---|

@@ -13,6 +13,8 @@ Flags:
 
   --port <number>    HTTP port (default: CC_WWWROOT_PORT or 60050)
   --host <string>    Bind address (default: CC_WWWROOT_HOST or 0.0.0.0)
+  --check            Validate <dir>/data and exit: 0 when there are no errors, 1 otherwise.
+                     The server is not started. The same check runs before every start.
   --help             Print this help message
   --version          Print the version
 
@@ -196,7 +198,9 @@ index_N.jsonl (one line per script):
 Startup check:
 
   Before listening, the folder is validated. A single error refuses to start (exit code 1);
-  warnings are printed and the server starts anyway. What is checked:
+  warnings are printed and the server starts anyway. \`npx pine2profit <dir> --check\` runs the
+  same validation and exits without starting the server, for the agent to call after every
+  write. What is checked:
 
     data/ exists; index_1.jsonl exists (an empty file is fine); index files are numbered without gaps
     every index line is JSON with the fields above: required ones present, types and values right,
@@ -224,6 +228,7 @@ Environment variables:
 Examples:
 
   npx pine2profit .
+  npx pine2profit . --check
   npx pine2profit ./project --port 8080
   npx pine2profit /var/agent/project --host 127.0.0.1 --port 60050
 `.trimStart();
