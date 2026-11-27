@@ -16,6 +16,20 @@
   "cycleStart": "2026-11-26",
   "reason": "not tradeable: the signal depends on realtime tick data (varip) and cannot be reproduced on history, so no rule can be executed through alerts"
  },
+ "groups": [
+  {
+   "code": "A",
+   "title": "What it is"
+  },
+  {
+   "code": "D",
+   "title": "Verdict"
+  },
+  {
+   "code": "E",
+   "title": "Iterations"
+  }
+ ],
  "messages": [
   {
    "code": "A0",

@@ -62,10 +62,19 @@ export interface IndexRow {
   reason: string;
 }
 
+/** A group of the left navigation, declared in data/<id>_messages.json. */
+export interface MessageGroup {
+  /** prefix of the message codes that belong here: "A" for A0, A1 …; any string works */
+  code: string;
+  title: string;
+}
+
 /** data/<id>_messages.json — the agent's text, rendered in file order. */
 export interface Message {
-  /** A0, B2, E1 … — groups the left navigation by the first letter; optional */
+  /** A0, B2, E1 … — shown on the block and in the left navigation; optional */
   code?: string;
+  /** which navigation group this message belongs to; default: the leading letters of `code` */
+  group?: string;
   title: string;
   md: string;
   /** set on messages that belong to a dated iteration; consecutive messages with the same value form a section */
@@ -76,6 +85,8 @@ export interface Message {
 export interface MessagesFile {
   /** the index line again, so a direct link to /run/?id=… needs no index scan */
   head?: IndexLine;
+  /** left navigation groups in display order; a group that appears in messages but not here is shown with its code as the title */
+  groups?: MessageGroup[];
   messages: Message[];
 }
 
@@ -136,6 +147,8 @@ export interface ChartRef {
 export interface Block {
   key: string;
   code: string;
+  /** navigation group: message.group or the leading letters of code, "" when neither */
+  group: string;
   title: string;
   html: string;
   md: string;

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Unbounded, Hanken_Grotesk, JetBrains_Mono } from 'next/font/google';
+import { Unbounded, Hanken_Grotesk, JetBrains_Mono, Archivo_Black } from 'next/font/google';
 import './globals.css';
 import { withBase } from '@/lib/base';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -8,6 +8,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 const display = Unbounded({ subsets: ['latin'], weight: ['500', '600', '700', '800'], variable: '--font-display', display: 'swap' });
 const sans = Hanken_Grotesk({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans', display: 'swap' });
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '700'], variable: '--font-mono', display: 'swap' });
+// the verdict word only: a plain heavy grotesque with a straight E
+const verdict = Archivo_Black({ subsets: ['latin'], weight: '400', variable: '--font-verdict', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Can money be made on this?',
@@ -20,7 +22,7 @@ const themeInit = `(function(){try{var t=localStorage.getItem('pm-theme');if(t==
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable} ${verdict.variable}`}>
       <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
       <body>
         <header className="top">

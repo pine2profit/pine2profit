@@ -83,19 +83,22 @@ export function RunView() {
   const usable = h.usable;
   const cycleStart = Date.parse(h.cycleStart);
 
+  // Left navigation: groups come from messages.json (`groups`, in that order); a group that only shows up
+  // in message codes is appended with its code as the title. Nothing about A–E is known here.
   const rail = useMemo<RailGroup[]>(() => {
-    const GT: Record<string, string> = { A: 'What it is', B: h.kind === 'strategy' ? 'Tester vs. alerts' : 'Signal → trade', C: 'Money', D: 'Verdict', E: 'Iterations', [NOTES]: 'Notes' };
-    const letterOf = (b: Block) => (/^[A-Za-z]/.test(b.code) ? b.code.charAt(0).toUpperCase() : NOTES);
-    const letters = [...new Set(blocks.map(letterOf))];
-    return letters.map((L) => {
-      const bs = blocks.filter((b) => letterOf(b) === L);
-      const iterated = bs.every((b) => b.iteration != null);
-      const items = iterated
-        ? [...new Set(bs.map((b) => b.iteration as number))].map((n) => ({ code: pad3(n), id: `iter-${n}` }))
-        : bs.map((b) => ({ code: b.code || '•', id: b.key }));
-      return { letter: L, title: GT[L] ?? L, items };
-    });
-  }, [blocks, h.kind]);
+    const declared = messages?.groups ?? [];
+    const codes = [...new Set([...declared.map((g) => g.code), ...blocks.map((b) => b.group)])];
+    return codes
+      .map((code) => {
+        const bs = blocks.filter((b) => b.group === code);
+        const iterated = bs.length > 0 && bs.every((b) => b.iteration != null);
+        const items = iterated
+          ? [...new Set(bs.map((b) => b.iteration as number))].map((n) => ({ code: pad3(n), id: `iter-${n}` }))
+          : bs.map((b) => ({ code: b.code || '•', id: b.key }));
+        return { letter: code || NOTES, title: declared.find((g) => g.code === code)?.title ?? (code ? code : 'Notes'), items };
+      })
+      .filter((g) => g.items.length);
+  }, [blocks, messages]);
 
   if (!id) return <div className="wrap"><div className="run-head"><h1>No script id</h1></div><p className="muted">Open a script from the list: /run/?id=…</p></div>;
   if (error) return <div className="wrap"><div className="run-head"><h1>{h.title}</h1></div><p className="muted">Could not load this script: {error}</p></div>;

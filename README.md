@@ -53,16 +53,27 @@ Required: `id`, `title`, `kind` (`indicator` | `strategy`), `verdict` (`YES` | `
 
 ```json
 { "head": { "...the same object as the index line..." },
+  "groups": [
+    { "code": "A", "title": "What it is" },
+    { "code": "C", "title": "Money" },
+    { "code": "E", "title": "Iterations" }
+  ],
   "messages": [
-    { "code": "A0", "title": "How to run it", "md": "…", },
+    { "code": "A0", "title": "How to run it", "md": "…" },
+    { "code": "C7", "title": "The main number", "md": "…" },
     { "code": "E1", "title": "What happened since the previous iteration?", "md": "…", "iteration": 3, "date": "2026-11-26" }
   ] }
 ```
 
 `head` repeats the index line so a direct link to `/run/?id=…` needs no index scan. `messages` are rendered
-in file order, nothing is deduplicated: put in the file what the page should show. `code` is optional and
-groups the left navigation by its first letter (A–E have titles, other letters show as is). Messages with
-`iteration` form a dated section; messages without it go under "Analysis".
+in file order, nothing is deduplicated: put in the file what the page should show. Messages with `iteration`
+form a dated section; messages without it go under "Analysis".
+
+`groups` is the left navigation, in that order. A message belongs to the group whose `code` equals its
+`group` field, or, without one, the leading letters of its `code` (`A0` → `A`, `RISK2` → `RISK`). A group that
+appears in messages but not in `groups` is shown with its code as the title; a group without messages is
+dropped. Inside a group the items are the message codes, or the iteration numbers when every message of the
+group carries `iteration`. Nothing about the letters is known to the site: any codes and titles work.
 
 Markdown may reference the chart; every reference becomes a button that frames the chart:
 

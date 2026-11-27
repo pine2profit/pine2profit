@@ -114,6 +114,7 @@ export class MarkdownHelperService {
     return {
       key,
       code,
+      group: message.group ?? (/^[A-Za-z]+/.exec(code)?.[0].toUpperCase() ?? ''),
       title: message.title,
       html: md.render(message.md ?? ''),
       md: message.md ?? '',

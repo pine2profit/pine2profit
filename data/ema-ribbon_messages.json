@@ -23,6 +23,28 @@
   "percentile": 59,
   "reason": "12 months −$3,419; only 4/10 markets positive; not better than random entries (59th percentile)"
  },
+ "groups": [
+  {
+   "code": "A",
+   "title": "What it is"
+  },
+  {
+   "code": "B",
+   "title": "Signal → trade"
+  },
+  {
+   "code": "C",
+   "title": "Money"
+  },
+  {
+   "code": "D",
+   "title": "Verdict"
+  },
+  {
+   "code": "E",
+   "title": "Iterations"
+  }
+ ],
  "messages": [
   {
    "code": "A0",
