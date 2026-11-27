@@ -29,8 +29,10 @@ The package does not write `data/`. It is built so that an AI agent running in a
 1. **Start the preview** in the project folder and leave it running:
 
    ```bash
-   mkdir -p project/data && npx pine2profit ./project
+   mkdir -p project/data && touch project/data/index_1.jsonl && npx pine2profit ./project
    ```
+
+   An empty `index_1.jsonl` is a valid start. The folder is checked on every start and a single error refuses to start, so the agent never looks at a page that silently shows something wrong.
 
 2. **Give the agent the contract.** `npx pine2profit --help` prints it with JSON examples; paste the output into the agent's system prompt or `CLAUDE.md`, together with the question it has to answer for every script and the rule for writing the report. The agent needs to know four things:
 
@@ -64,6 +66,20 @@ The server answers two things and nothing else — no API, no POST:
 
 - `GET /` — the dashboard
 - `GET /data/<file>` — `<dir>/data/<file>` as is, `Cache-Control: no-store`, 404 when the file is missing
+
+### Startup check
+
+Before listening, `<dir>/data` is validated against the contract below. A single error refuses to start with exit code 1 and the list of problems (`file:line` for the index, `file  path` inside JSON documents, at most 50 shown); warnings are printed and the server starts anyway.
+
+| checked | error |
+|---|---|
+| `data/` exists, `index_1.jsonl` exists (an empty file is fine), index files are numbered without gaps | |
+| every index line is JSON with the fields below | required field missing, wrong type or value, unknown field (a typo such as `tv_url` is reported with the right name) |
+| every script in the index has `<id>_messages.json` and `<id>_candles.json` | missing file, invalid JSON |
+| `<id>_messages.json` | `head` differs from the index line, bad `groups` or `messages` shape, a chart reference that points at nothing (`[[trade:99]]` without that trade, a range that ends before it starts, a date that does not parse) |
+| `<id>_candles.json` | empty or non-numeric `bars`, time not growing, `high` below `low`, duplicate trade ids |
+| `<id>_pinescript.json` (optional) | invalid JSON, `source` missing |
+| warnings only | files for ids that are not in the index, files the site never reads, a missing `head` |
 
 ## The data folder
 
@@ -208,9 +224,10 @@ No file at all: the page says "no candles for this script" and the text still re
 ## Using the server from code
 
 ```ts
-import { serve, setLogger, setConfig } from "pine2profit";
+import { serve, validate, setLogger, setConfig } from "pine2profit";
 
-const dispose = serve("0.0.0.0", 60050, "/path/to/project");  // serves /path/to/project/data
+const report = await validate("/path/to/project");            // { errors, warnings, issues: [{ level, file, line?, at?, message }] }
+const dispose = serve("0.0.0.0", 60050, "/path/to/project");  // serves /path/to/project/data; serve() itself does not validate
 ```
 
 The third argument wins over `CC_DATA_PATH`, which wins over `process.cwd()`.

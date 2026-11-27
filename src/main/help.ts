@@ -193,6 +193,20 @@ index_N.jsonl (one line per script):
     "rule": "//@version=5\\nstrategy(\\"EMA Ribbon rule\\", overlay=true, initial_capital=10000)\\nif ta.crossover(ta.ema(close, 20), ta.ema(close, 50))\\n    strategy.entry(\\"Long\\", strategy.long)\\nif ta.crossunder(ta.ema(close, 20), ta.ema(close, 50))\\n    strategy.close(\\"Long\\")"
   }
 
+Startup check:
+
+  Before listening, the folder is validated. A single error refuses to start (exit code 1);
+  warnings are printed and the server starts anyway. What is checked:
+
+    data/ exists; index_1.jsonl exists (an empty file is fine); index files are numbered without gaps
+    every index line is JSON with the fields above: required ones present, types and values right,
+      no unknown fields (a typo such as "tv_url" is reported together with the right name)
+    every script in the index has <id>_messages.json and <id>_candles.json; <id>_pinescript.json is optional
+    <id>_messages.json: "head" equals the index line, "groups" and "messages" have the right shape,
+      every [[t:...]], [[range:...]], [[trade:N]] and (ref:...) points at a real date, range or trade
+    <id>_candles.json: "bars" not empty and numeric with growing time and high >= low, trade ids unique
+    warnings only: files for ids that are not in the index, files the site never reads, a missing "head"
+
 A minimal data folder:
 
   <dir>/data/index_1.jsonl

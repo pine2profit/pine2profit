@@ -18,6 +18,46 @@ interface ILogger {
 
 declare const setLogger: (logger: ILogger) => void;
 
+type IssueLevel = "error" | "warning";
+interface DataIssue {
+    level: IssueLevel;
+    /** relative to the project root: data/index_1.jsonl */
+    file: string;
+    /** 1-based line of a .jsonl file */
+    line?: number;
+    /** location inside a JSON document: messages[2].md */
+    at?: string;
+    message: string;
+}
+interface DataReport {
+    root: string;
+    scripts: number;
+    chunks: number;
+    errors: number;
+    warnings: number;
+    issues: DataIssue[];
+}
+declare class DataValidationService {
+    private readonly loggerService;
+    /**
+     * Checks <root>/data against the contract: the index files, every script's files and their
+     * schemas, the chart references inside the markdown. Errors mean the site would show something
+     * wrong or nothing at all; warnings are things worth cleaning up.
+     */
+    validate: (root: string) => Promise<DataReport>;
+    private readJson;
+    private checkObject;
+    /** "tv_url" → ' (did you mean "tvUrl"?)' */
+    private suggest;
+    private checkCandles;
+    private checkMessages;
+    /** [[t:…]], [[range:…]], [[trade:N]] and [text](ref:…) must point at something the chart can show. */
+    private checkRefs;
+}
+
+/** Checks <root>/data against the contract and returns every problem found. */
+declare function validate(root: string): Promise<DataReport>;
+
 declare const GLOBAL_CONFIG: {
     CC_WWWROOT_PATH: string;
     CC_WWWROOT_HOST: string;
@@ -74,8 +114,9 @@ declare class DataViewService {
 }
 
 declare const ioc: {
+    dataValidationService: DataValidationService;
     dataViewService: DataViewService;
     loggerService: LoggerService;
 };
 
-export { type Config, type ILogger, getConfig, getPublicPath, getRouter, ioc as lib, serve, setConfig, setLogger };
+export { type Config, type DataIssue, type DataReport, type ILogger, type IssueLevel, getConfig, getPublicPath, getRouter, ioc as lib, serve, setConfig, setLogger, validate };
