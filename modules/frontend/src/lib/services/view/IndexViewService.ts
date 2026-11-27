@@ -15,6 +15,7 @@ const chunkUrl = (n: number) => withBase(`/data/index_${n}.jsonl`);
  * The list: data/index_1.jsonl, index_2.jsonl, … read one after another until the first non-OK response.
  * Every line is one script; a later line with the same id replaces the earlier one, so the agent can
  * append updates to the last chunk without rewriting old ones. Subscribers get the whole set each time.
+ * Only a 404 ends the list; any other failure rejects load() so the page can show it.
  */
 export class IndexViewService {
   private readonly loggerService = inject<LoggerService>(TYPES.loggerService);
@@ -36,9 +37,12 @@ export class IndexViewService {
     try {
       for (let n = 1; ; n += 1) {
         const res = await fetch(chunkUrl(n));
-        if (!res.ok) {
-          this.loggerService.log('indexViewService load end', { chunk: n, status: res.status });
+        if (res.status === 404) {
+          this.loggerService.log('indexViewService load end', { chunk: n });
           break;
+        }
+        if (!res.ok) {
+          throw new Error(`index_${n}.jsonl: HTTP ${res.status}`);
         }
         await this.readChunk(res);
         await this.rowsSubject.next(this.getRows());
@@ -55,6 +59,10 @@ export class IndexViewService {
       if (!l) return;
       try {
         const row = decodeLine(JSON.parse(l) as IndexLine);
+        if (!row) {
+          this.loggerService.warn('indexViewService readChunk line without id', { line: l.slice(0, 120) });
+          return;
+        }
         this.rows.set(row.id, row);
         pending += 1;
       } catch (error) {

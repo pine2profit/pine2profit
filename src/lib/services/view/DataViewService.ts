@@ -1,18 +1,19 @@
-import fs from "fs";
-import { realpath, stat } from "fs/promises";
+import type { ReadStream } from "fs";
+import { open, realpath } from "fs/promises";
 import path from "path";
 
 import { inject } from "../../core/di";
 import LoggerService from "../base/LoggerService";
 import { TYPES } from "../../core/types";
-import { getConfig } from "../../../config/params";
 import { serveSubject } from "../../../config/emitters";
 
 const DATA_DIR = "data";
 
 export interface DataFile {
   path: string;
+  /** size of the file that `stream` reads, taken from the same open handle */
   size: number;
+  stream: ReadStream;
 }
 
 const isInside = (root: string, target: string) =>
@@ -25,11 +26,9 @@ const normalizeSegments = (relPath: string) =>
 export class DataViewService {
   private readonly loggerService = inject<LoggerService>(TYPES.loggerService);
 
-  /** <root>/data, where root is CC_DATA_PATH or the cwd passed to serve(). */
+  /** <root>/data; serve() resolves root once (its cwd argument, else CC_DATA_PATH, else process.cwd()). */
   public getRoot = () => {
-    const { CC_DATA_PATH } = getConfig();
-    const base = CC_DATA_PATH || serveSubject.data || process.cwd();
-    return path.resolve(base, DATA_DIR);
+    return path.resolve(serveSubject.data || process.cwd(), DATA_DIR);
   };
 
   /**
@@ -53,23 +52,29 @@ export class DataViewService {
     }
   };
 
-  public stat = async (relPath: string): Promise<DataFile | null> => {
-    this.loggerService.log("dataViewService stat", { relPath });
+  /**
+   * Opens a file for streaming. The handle is opened first and the size read from it, so the
+   * Content-Length matches the bytes the stream will deliver even if the agent replaces the
+   * file (rename) meanwhile; the stream closes the handle when it ends or fails.
+   */
+  public open = async (relPath: string): Promise<DataFile | null> => {
+    this.loggerService.log("dataViewService open", { relPath });
     const filePath = await this.resolve(relPath);
     if (!filePath) {
       return null;
     }
+    let handle: Awaited<ReturnType<typeof open>>;
     try {
-      const fileStat = await stat(filePath);
-      return fileStat.isFile() ? { path: filePath, size: fileStat.size } : null;
+      handle = await open(filePath, "r");
     } catch {
       return null;
     }
-  };
-
-  public createReadStream = (filePath: string) => {
-    this.loggerService.log("dataViewService createReadStream", { filePath });
-    return fs.createReadStream(filePath);
+    const fileStat = await handle.stat();
+    if (!fileStat.isFile()) {
+      await handle.close();
+      return null;
+    }
+    return { path: filePath, size: fileStat.size, stream: handle.createReadStream() };
   };
 }
 

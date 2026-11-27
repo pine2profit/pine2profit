@@ -6,8 +6,6 @@ import { serve } from "../function/serve.function";
 
 declare const __PACKAGE_VERSION__: string;
 
-declare function parseInt(value: unknown): number;
-
 const HELP_TEXT = `
 pine2profit ${__PACKAGE_VERSION__}
 
@@ -46,7 +44,12 @@ export const main = () => {
 
   setConfig({ CC_DATA_PATH: root });
   if (values.port) {
-    setConfig({ CC_WWWROOT_PORT: parseInt(values.port) });
+    const port = Number(values.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      console.error(`--port must be an integer between 1 and 65535, got "${values.port}"`);
+      process.exit(1);
+    }
+    setConfig({ CC_WWWROOT_PORT: port });
   }
   if (values.host) {
     setConfig({ CC_WWWROOT_HOST: String(values.host) });

@@ -1,7 +1,11 @@
 import http from 'http';
-import fs from 'fs';
+import { ReadStream } from 'fs';
 
 type CallbackFn = (error?: Error) => void;
+/**
+ * Starts the server. `cwd` is the project root whose data/ folder is served: the argument wins,
+ * then the CC_DATA_PATH environment variable, then process.cwd().
+ */
 declare function serve(host?: string, port?: number, cwd?: string, callback?: CallbackFn): () => void;
 declare function getRouter(): http.RequestListener;
 
@@ -38,20 +42,22 @@ declare function getPublicPath(): string;
 
 declare class LoggerService implements ILogger {
     private _commonLogger;
-    log: (topic: string, ...args: any[]) => Promise<void>;
-    debug: (topic: string, ...args: any[]) => Promise<void>;
-    info: (topic: string, ...args: any[]) => Promise<void>;
-    warn: (topic: string, ...args: any[]) => Promise<void>;
+    log: (topic: string, ...args: any[]) => void;
+    debug: (topic: string, ...args: any[]) => void;
+    info: (topic: string, ...args: any[]) => void;
+    warn: (topic: string, ...args: any[]) => void;
     setLogger: (logger: ILogger) => void;
 }
 
 interface DataFile {
     path: string;
+    /** size of the file that `stream` reads, taken from the same open handle */
     size: number;
+    stream: ReadStream;
 }
 declare class DataViewService {
     private readonly loggerService;
-    /** <root>/data, where root is CC_DATA_PATH or the cwd passed to serve(). */
+    /** <root>/data; serve() resolves root once (its cwd argument, else CC_DATA_PATH, else process.cwd()). */
     getRoot: () => string;
     /**
      * Absolute path of a file inside the data root, or null when the request points
@@ -59,8 +65,12 @@ declare class DataViewService {
      * symlink inside data/ cannot lead out either.
      */
     resolve: (relPath: string) => Promise<string | null>;
-    stat: (relPath: string) => Promise<DataFile | null>;
-    createReadStream: (filePath: string) => fs.ReadStream;
+    /**
+     * Opens a file for streaming. The handle is opened first and the size read from it, so the
+     * Content-Length matches the bytes the stream will deliver even if the agent replaces the
+     * file (rename) meanwhile; the stream closes the handle when it ends or fails.
+     */
+    open: (relPath: string) => Promise<DataFile | null>;
 }
 
 declare const ioc: {

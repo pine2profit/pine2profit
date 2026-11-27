@@ -21,15 +21,16 @@
     "build:modules:x": "sh ./scripts/linux/build.sh && npm run build:copy && npm run build:postbuild",
     "build:modules:win": ".\\scripts\\win\\build.bat && npm run build:copy && npm run build:postbuild",
     "build:copy": "node ./scripts/copy.mjs",
-    "build:postbuild": "node ./scripts/postbuild.mjs"
+    "build:postbuild": "node ./scripts/postbuild.mjs",
+    "prepublishOnly": "npm run build:modules"
   },
   "main": "build/index.cjs",
   "module": "build/index.mjs",
   "source": "src/index.ts",
   "types": "./types.d.ts",
   "exports": {
-    "require": "./build/index.cjs",
     "types": "./types.d.ts",
+    "require": "./build/index.cjs",
     "import": "./build/index.mjs",
     "default": "./build/index.cjs"
   },

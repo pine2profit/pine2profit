@@ -3,10 +3,11 @@ import type { IndexLine, IndexRow, Kind, VerdictWord } from './types';
 const KINDS: Kind[] = ['indicator', 'strategy'];
 const VERDICTS: VerdictWord[] = ['YES', 'NO', 'UNKNOWN'];
 
-/** Fills the defaults of an index line so components never deal with absent fields. */
-export function decodeLine(l: IndexLine): IndexRow {
+/** Fills the defaults of an index line so components never deal with absent fields; null when the line has no id. */
+export function decodeLine(l: IndexLine): IndexRow | null {
+  if (typeof l.id !== 'string' || !l.id.trim()) return null;
   return {
-    id: String(l.id),
+    id: l.id,
     title: l.title ?? String(l.id),
     kind: KINDS.includes(l.kind) ? l.kind : 'indicator',
     subcategory: l.subcategory ?? null,

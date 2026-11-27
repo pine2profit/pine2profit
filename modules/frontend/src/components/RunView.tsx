@@ -52,7 +52,14 @@ export function RunView() {
         ioc.pinescriptViewService.getPinescript(id),
       ]);
       if (cancelled) return;
-      if (m?.head) setHead(decodeLine(m.head));
+      let row = m?.head ? decodeLine(m.head) : ioc.indexViewService.rowById(id);
+      if (!row && m) {
+        // no head in the file and the list was not visited: the index is the only place the header lives
+        try { await ioc.indexViewService.load(); } catch { /* the page still renders the messages */ }
+        if (cancelled) return;
+        row = ioc.indexViewService.rowById(id);
+      }
+      setHead(row);
       setMessages(m); setCandles(c); setPine(p);
     })().catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
     return () => { cancelled = true; };
@@ -103,6 +110,7 @@ export function RunView() {
   if (!id) return <div className="wrap"><div className="run-head"><h1>No script id</h1></div><p className="muted">Open a script from the list: /run/?id=…</p></div>;
   if (error) return <div className="wrap"><div className="run-head"><h1>{h.title}</h1></div><p className="muted">Could not load this script: {error}</p></div>;
   if (messages === null && !head) return <div className="wrap"><div className="run-head"><h1>Not found</h1></div><p className="muted">There is no script with id <code>{id}</code>.</p></div>;
+  if (messages === undefined && !head) return <div className="wrap"><div className="run-head"><h1>loading…</h1></div></div>;
 
   return (
     <div className="wrap">

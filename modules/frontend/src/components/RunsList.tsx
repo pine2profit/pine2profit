@@ -63,6 +63,7 @@ export function RunsList() {
   const [f, setF] = useState<Filters>(() => readFilters(new URLSearchParams(sp.toString())));
   const [all, setAll] = useState<IndexRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const svc = ioc.indexViewService;
@@ -70,7 +71,7 @@ export function RunsList() {
     if (svc.doneSubject.data) setLoading(false);
     const unRows = svc.rowsSubject.subscribe((rows: IndexRow[]) => startTransition(() => setAll(rows)));
     const unDone = svc.doneSubject.subscribe((done: boolean) => { if (done) setLoading(false); });
-    svc.load().catch(() => setLoading(false));
+    svc.load().catch((e: unknown) => { setError(e instanceof Error ? e.message : String(e)); setLoading(false); });
     return () => { unRows(); unDone(); };
   }, []);
 
@@ -132,6 +133,7 @@ export function RunsList() {
         </select>
         <button className="pill-btn mono" onClick={() => update({ dir: dir === 1 ? -1 : 1 })} title="sort direction" aria-label="sort direction">{dir === 1 ? '↑' : '↓'}</button>
         <span className="count">{loading ? `loading… ${all.length}` : `${shown.length} of ${all.length}`}</span>
+        {error && <span className="count neg" title={error}>could not load the list: {error}</span>}
       </div>
       {chips.length > 0 && (
         <div className="chips">
@@ -151,7 +153,7 @@ export function RunsList() {
         computeItemKey={(_, row) => row.id}
         itemContent={(_, row) => <RunCard row={row} />}
       />
-      {!loading && !shown.length && <div className="empty">nothing matches the filters</div>}
+      {!loading && !error && !shown.length && <div className="empty">nothing matches the filters</div>}
     </>
   );
 }

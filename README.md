@@ -109,6 +109,7 @@ No file: no code panel. No `rule`: the chart runs the author's script only.
 ```ts
 import { serve, setLogger, setConfig } from "pine2profit";
 serve("0.0.0.0", 60050, "/path/to/project");   // serves /path/to/project/data; returns a dispose function
+// the third argument wins over CC_DATA_PATH, which wins over process.cwd()
 ```
 
 Environment: `CC_WWWROOT_HOST` (`0.0.0.0`), `CC_WWWROOT_PORT` (`60050`), `CC_DATA_PATH` (folder that contains

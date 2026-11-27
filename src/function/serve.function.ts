@@ -45,12 +45,18 @@ const serveInternal = singleshot(
   },
 );
 
-export function serve(host?: string, port?: number, cwd = process.cwd(), callback?: CallbackFn) {
+/**
+ * Starts the server. `cwd` is the project root whose data/ folder is served: the argument wins,
+ * then the CC_DATA_PATH environment variable, then process.cwd().
+ */
+export function serve(host?: string, port?: number, cwd?: string, callback?: CallbackFn) {
+  const root = cwd || getConfig().CC_DATA_PATH || process.cwd();
   ioc.loggerService.log(METHOD_NAME_SERVE, {
     host,
     port,
+    root,
   });
-  serveSubject.next(cwd);
+  serveSubject.next(root);
   return serveInternal(host, port, callback);
 }
 
