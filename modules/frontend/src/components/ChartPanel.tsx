@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { withBase, usd } from '@/lib/base';
 import type { ChartRef, Trade } from '@/lib/types';
 import { THEME_EVENT, currentTheme, type Theme } from './ThemeToggle';
+import type { ThemeId, UiTheme, VelaTheme } from '@luxalgo/vela';
+
+/** What `new Vela(host, { theme })` accepts: a built-in id or a full theme object. */
+type VelaThemeOption = ThemeId | VelaTheme | UiTheme;
 
 export const GOTO_EVENT = 'pm:goto';
 export const RESET_EVENT = 'pm:reset';
@@ -34,10 +38,10 @@ const PALETTE = {
  * colors; check the field names against the installed Vela's docs/user/options.md ("createTheme") — if the
  * call fails we fall back to the built-in 'light' / 'dark' themes so the chart always renders.
  */
-async function velaTheme(t: Theme): Promise<unknown> {
+async function velaTheme(t: Theme): Promise<VelaThemeOption> {
   const p = PALETTE[t];
   try {
-    const mod = (await import('@luxalgo/vela')) as unknown as { createTheme?: (o: Record<string, unknown>) => unknown };
+    const mod = (await import('@luxalgo/vela')) as unknown as { createTheme?: (o: Record<string, unknown>) => VelaThemeOption };
     if (typeof mod.createTheme === 'function') {
       return mod.createTheme({ base: t, background: p.bg, grid: p.grid, text: p.text, upColor: p.up, downColor: p.down, accent: p.accent, font: 'JetBrains Mono, ui-monospace, monospace' });
     }
