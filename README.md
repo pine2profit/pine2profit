@@ -1,125 +1,186 @@
 # pine2profit
 
-An agent loops over TradingView Pine Script indicators and strategies with one question: can money be made
-on them by trading their alerts. This repo is the site that shows its reports and the tool to preview them.
-
-- `modules/frontend` — the site (Next.js, static export). It reads everything with plain GET from `data/`,
-  so the same build works on GitHub Pages and from the local server.
-- `src/` — the local preview server and the `pine2profit` CLI: the built site from this package plus
-  `GET /data/**/*` from `<dir>/data`. Nothing else, no API with a body.
-- `data/` — what the agent writes. The three scripts in here are the reference for the format.
+A dashboard for reports on TradingView Pine Script indicators and strategies, answering one question per script: **can money be made on it by trading its alerts?** The package is the static site plus a local server that serves your `data/` folder to it. Who writes `data/` — an agent, a script, you by hand — is outside the package; the contract is below.
 
 ```bash
-npm install
-npm start                      # builds modules/frontend, copies it into build/, serves ./data on http://localhost:60050
-npx pine2profit <dir> --port 60050 --host 0.0.0.0   # dir = folder that contains data/, required
-npx pine2profit --help                              # the data contract with JSON examples
+npx pine2profit <dir>            # dir = the folder that contains data/
 ```
 
-## data/ — the contract
+Open http://localhost:60050. The site reads everything with plain `GET` from `data/`, so a data folder that works here works on GitHub Pages unchanged.
 
-All files are flat in one folder. `id` is a slug (`[a-z0-9-]+`) and prefixes the per-script files.
+## CLI
 
-### `data/index_1.jsonl`, `index_2.jsonl`, …
-
-The list. One JSON object per line, one script per object. The site reads `index_1`, then `index_2`, and
-so on until a file is missing (404). Keep a chunk around 1000 lines. A later line with the same `id`
-replaces the earlier one, so updates can be appended to the last chunk without rewriting old ones.
-
-Required: `id`, `title`, `kind` (`indicator` | `strategy`), `verdict` (`YES` | `NO` | `UNKNOWN`), `updated`
-(`YYYY-MM-DD`). Dollars are integers on a notional $10,000 account. Leave a field out when it is null.
-
-```json
-{"id":"sma-cross-20-50","title":"SMA Cross 20/50","kind":"strategy","subcategory":"trend-following","verdict":"NO",
- "main":-2465,"paper":461,"paperTrades":3,"expected":[-599,181],"iterations":3,"updated":"2026-11-26",
- "market":"BTCUSDT","timeframe":"1h","license":"MPL-2.0","author":"example_author",
- "tvUrl":"https://www.tradingview.com/script/EXAMPLE02/","cycleStart":"2026-11-12","percentile":59,
- "reason":"12 months −$2,465; only 4/10 markets positive; not better than random entries (59th percentile)"}
+```bash
+npx pine2profit .
+npx pine2profit ./project --port 8080
+npx pine2profit /var/agent/project --host 127.0.0.1 --port 60050
+npx pine2profit --help                 # the data contract with JSON examples
 ```
 
-| field | meaning |
-|---|---|
-| `subcategory` | any key; the list builds its filter chips from the values it sees, known keys from `modules/frontend/src/lib/taxonomy.ts` get a label |
-| `usable` | `false` when no signal is final at bar close (indicators): the page shows "not tradeable", no rule, no money |
-| `main` | 12 months via alerts, $ |
-| `paper`, `paperTrades` | paper journal since `cycleStart`, $ and number of trades |
-| `expected` | expected per month, `[low, high]` |
-| `iterations` | how many iterations the agent has run |
-| `market`, `timeframe`, `license`, `author`, `tvUrl` | header chips and the author link |
-| `cycleStart` | `YYYY-MM-DD`, drawn on the chart and the P&L line |
-| `percentile` | the rule's percentile against random entries |
-| `reason` | one sentence under the verdict |
+| flag | default | |
+|---|---|---|
+| `--port <number>` | `CC_WWWROOT_PORT` or `60050` | HTTP port |
+| `--host <string>` | `CC_WWWROOT_HOST` or `0.0.0.0` | bind address |
+| `--help`, `--version` | | |
 
-### `data/<id>_messages.json`
+The server answers two things and nothing else — no API, no POST:
+
+- `GET /` — the dashboard
+- `GET /data/<file>` — `<dir>/data/<file>` as is, `Cache-Control: no-store`, 404 when the file is missing
+
+## The data folder
+
+Everything lives flat in `<dir>/data/`, no subfolders. `<id>` is a slug matching `[a-z0-9-]+` and prefixes every file of that script.
+
+```
+data/
+  index_1.jsonl                     the list, ~1000 lines per file; index_2.jsonl, … continue it
+  sma-cross-20-50_messages.json     the report text for one script
+  sma-cross-20-50_candles.json      bars, trades and equity for the chart
+  sma-cross-20-50_pinescript.json   the author's script and the trade rule (optional)
+```
+
+Dollars are integers on a notional $10,000 account. Leave a field out when it is null.
+
+### `index_N.jsonl` — the list
+
+One JSON object per line, one script per object. The site reads `index_1`, then `index_2`, … and stops at the first 404. **A later line with the same `id` replaces the earlier one**, so append updates to the last file instead of rewriting old ones.
+
+Required: `id`, `title`, `kind`, `verdict`, `updated`.
 
 ```json
-{ "head": { "...the same object as the index line..." },
+{"id":"sma-cross-20-50","title":"SMA Cross 20/50","kind":"strategy","subcategory":"trend-following","verdict":"NO","main":-2465,"paper":461,"paperTrades":3,"expected":[-599,181],"iterations":3,"updated":"2026-11-26","market":"BTCUSDT","timeframe":"1h","license":"MPL-2.0","author":"example_author","tvUrl":"https://www.tradingview.com/script/EXAMPLE02/","cycleStart":"2026-11-12","percentile":59,"reason":"12 months −$2,465; only 4/10 markets positive; not better than random entries (59th percentile)"}
+```
+
+| field | type | meaning |
+|---|---|---|
+| `id` | string | slug, prefix of the script's other files |
+| `title` | string | |
+| `kind` | `indicator` \| `strategy` | |
+| `subcategory` | string | any key — the list builds its filter chips from the values it sees. Keys with a label on the site: indicators `trend oscillator volatility volume structure signals`; strategies `trend-following mean-reversion breakout grid-dca pattern-event composite` |
+| `usable` | boolean | `false` = no signal is final at bar close. The page says "not tradeable" and shows no rule and no money numbers |
+| `verdict` | `YES` \| `NO` \| `UNKNOWN` | |
+| `main` | number | 12 months via alerts, $ |
+| `paper`, `paperTrades` | number | paper journal since `cycleStart`: $ and trade count |
+| `expected` | `[low, high]` | expected per month on $10,000 |
+| `iterations` | number | default 1 |
+| `updated` | `YYYY-MM-DD` | |
+| `market`, `timeframe`, `license`, `author`, `tvUrl` | string | header chips and the author link |
+| `cycleStart` | `YYYY-MM-DD` | drawn on the chart and on the P&L line |
+| `percentile` | number | the rule's percentile against random entries |
+| `reason` | string | one sentence under the verdict |
+
+A script that is not tradeable:
+
+```json
+{"id":"volume-pressure","title":"Volume Pressure Delta","kind":"indicator","subcategory":"volume","usable":false,"verdict":"NO","iterations":1,"updated":"2026-11-26","market":"BTCUSDT","timeframe":"1h","reason":"not tradeable: the signal depends on realtime tick data (varip)"}
+```
+
+### `<id>_messages.json` — the report text
+
+```json
+{
+  "head": { "id": "sma-cross-20-50", "title": "SMA Cross 20/50", "kind": "strategy", "verdict": "NO", "updated": "2026-11-26", "…": "the same fields as the index line" },
   "groups": [
     { "code": "A", "title": "What it is" },
     { "code": "C", "title": "Money" },
     { "code": "E", "title": "Iterations" }
   ],
   "messages": [
-    { "code": "A0", "title": "How to run it", "md": "…" },
-    { "code": "C7", "title": "The main number", "md": "…" },
-    { "code": "E1", "title": "What happened since the previous iteration?", "md": "…", "iteration": 3, "date": "2026-11-26" }
-  ] }
+    { "code": "A0", "title": "How to run it", "md": "Run it on **1h**. A typical trade: [[trade:137]]." },
+    { "code": "C2", "title": "The last 12 months", "md": "Window [[range:2025-11-12T00:00Z..2026-11-12T00:00Z]]: 97 trades, -$2,465." },
+    { "code": "E1", "title": "What happened since the previous iteration?", "md": "Three paper trades, +$461.", "iteration": 3, "date": "2026-11-26" },
+    { "code": "E1", "title": "What happened since the previous iteration?", "md": "First week on paper.", "iteration": 2, "date": "2026-11-19" }
+  ]
+}
 ```
 
-`head` repeats the index line so a direct link to `/run/?id=…` needs no index scan. `messages` are rendered
-in file order, nothing is deduplicated: put in the file what the page should show. Messages with `iteration`
-form a dated section; messages without it go under "Analysis".
+- **`head`** repeats the index line with the same values, so a direct link to `/run/?id=<id>` renders the header without scanning the index.
+- **`groups`** is the left navigation, in this order.
+- **`messages`** render in file order; nothing is deduplicated — put in the file what the page should show.
 
-`groups` is the left navigation, in that order. A message belongs to the group whose `code` equals its
-`group` field, or, without one, the leading letters of its `code` (`A0` → `A`, `RISK2` → `RISK`). A group that
-appears in messages but not in `groups` is shown with its code as the title; a group without messages is
-dropped. Inside a group the items are the message codes, or the iteration numbers when every message of the
-group carries `iteration`. Nothing about the letters is known to the site: any codes and titles work.
+| message field | |
+|---|---|
+| `code` | optional; `A0`, `C7`, `E1`, `RISK2` — shown on the block and in the navigation |
+| `group` | optional; default: the leading letters of `code` (`A0` → `A`, `RISK2` → `RISK`) |
+| `title` | |
+| `md` | markdown |
+| `iteration` | optional; consecutive messages with the same value form a dated section. Messages without it go under "Analysis" |
+| `date` | optional; shown next to the section title |
 
-Markdown may reference the chart; every reference becomes a button that frames the chart:
+A group that appears in messages but not in `groups` is shown with its code as the title; a group without messages is dropped. Inside a group the navigation items are the message codes, or the iteration numbers when every message of the group carries `iteration`. The site knows nothing about the letters — any codes and titles work.
+
+**Chart references** inside `md` become buttons that frame the chart:
 
 ```
 [[t:2026-11-12T14:00Z]]                                a bar
 [[t:2026-11-12T14:00Z@41820]]                          a bar and a price
-[[range:2026-11-01T00:00Z..2026-11-08T00:00Z]]         a segment (both edges marked)
-[[trade:12]]                                           a trade from the candles file
-[see the breakout](ref:range:2026-11-01T00:00Z..2026-11-08T00:00Z)   the same as a link
+[[range:2026-11-01T00:00Z..2026-11-08T00:00Z]]         a segment, both edges marked
+[[trade:12]]                                           a trade from <id>_candles.json
+[see the breakout](ref:range:2026-11-01T00:00Z..2026-11-08T00:00Z)   the same, as a link
 ```
 
-### `data/<id>_candles.json`
+### `<id>_candles.json` — the chart
 
 ```json
-{ "timeframe": "1h",
-  "bars":   [ { "time": 1732665600000, "open": 62000, "high": 62000, "low": 61498.5, "close": 61498.5, "volume": 377 } ],
-  "trades": [ { "id": 1, "side": "long", "open_time": 1732928400000, "open_price": 61642.5, "close_time": 1732996800000, "close_price": 60510.8, "pnl_usd": -195.58 } ],
-  "equity": [ { "time": 1732665600000, "backtest_usd": 0, "paper_usd": null } ] }
+{
+  "timeframe": "1h",
+  "bars": [
+    { "time": 1732665600000, "open": 62000, "high": 62000, "low": 61498.5, "close": 61498.5, "volume": 377 },
+    { "time": 1732669200000, "open": 61498.5, "high": 61553.9, "low": 61201.0, "close": 61340.2, "volume": 412 }
+  ],
+  "trades": [
+    { "id": 1, "side": "long", "open_time": 1732928400000, "open_price": 61642.5, "close_time": 1732996800000, "close_price": 60510.8, "pnl_usd": -195.58 }
+  ],
+  "equity": [
+    { "time": 1732665600000, "backtest_usd": 0, "paper_usd": null },
+    { "time": 1732996800000, "backtest_usd": -195.58, "paper_usd": null }
+  ]
+}
 ```
 
-`bars` feed the chart; `trades` label and frame `[[trade:N]]`; `equity` is optional (no P&L panel without it).
+| key | |
+|---|---|
+| `timeframe` | optional; falls back to the index line |
+| `bars` | feed the chart; `time` in ms |
+| `trades` | optional; label and frame `[[trade:N]]`. `close_time` / `close_price` are `null` while open |
+| `equity` | optional; draws the P&L line — no line without it |
 
-### `data/<id>_pinescript.json` — optional
+No file at all: the page says "no candles for this script" and the text still renders.
+
+### `<id>_pinescript.json` — optional
 
 ```json
-{ "source": "// the author's script …", "rule": "// the agent's trade rule as a Pine strategy …" }
+{
+  "source": "//@version=5\nindicator(\"EMA Ribbon\", overlay=true)\nplot(ta.ema(close, 20))\nplot(ta.ema(close, 50))",
+  "rule": "//@version=5\nstrategy(\"EMA Ribbon rule\", overlay=true, initial_capital=10000)\nif ta.crossover(ta.ema(close, 20), ta.ema(close, 50))\n    strategy.entry(\"Long\", strategy.long)\nif ta.crossunder(ta.ema(close, 20), ta.ema(close, 50))\n    strategy.close(\"Long\")"
+}
 ```
 
-No file: no code panel. No `rule`: the chart runs the author's script only.
+`source` is the author's script: shown read-only and run on the chart. `rule` is the trade rule as a Pine `strategy()`; its fills become the trade markers. No file → no code panel. No `rule` → the chart runs the author's script only.
 
-## Server
+### A minimal data folder
+
+```
+<dir>/data/index_1.jsonl
+<dir>/data/sma-cross-20-50_messages.json
+<dir>/data/sma-cross-20-50_candles.json
+<dir>/data/sma-cross-20-50_pinescript.json
+```
+
+## Using the server from code
 
 ```ts
 import { serve, setLogger, setConfig } from "pine2profit";
-serve("0.0.0.0", 60050, "/path/to/project");   // serves /path/to/project/data; returns a dispose function
-// the third argument wins over CC_DATA_PATH, which wins over process.cwd()
+
+const dispose = serve("0.0.0.0", 60050, "/path/to/project");  // serves /path/to/project/data
 ```
 
-Environment: `CC_WWWROOT_HOST` (`0.0.0.0`), `CC_WWWROOT_PORT` (`60050`), `CC_DATA_PATH` (folder that contains
-`data/`), `CC_WWWROOT_PATH` (override of the static root).
+The third argument wins over `CC_DATA_PATH`, which wins over `process.cwd()`.
 
-```
-src/config/router.ts                  GET /data/* then the static site (serve-handler)
-src/routes/data.ts                    streams <root>/data/<path> with the right mime, Cache-Control: no-store, 404 as JSON
-src/lib/services/view/DataViewService.ts   resolves a request path inside data/, refuses anything outside (also through symlinks)
-src/main/start.ts                     the CLI (runs only when this bundle is the entry script)
-scripts/copy.mjs                      modules/frontend/out -> build/modules/frontend/build
-```
+| variable | default | |
+|---|---|---|
+| `CC_WWWROOT_HOST` | `0.0.0.0` | bind address |
+| `CC_WWWROOT_PORT` | `60050` | port |
+| `CC_DATA_PATH` | `process.cwd()` | folder that contains `data/` for `serve()` called without a path; the CLI always takes `<dir>` from the command line |
+| `CC_WWWROOT_PATH` | bundled build | override of the static root |
