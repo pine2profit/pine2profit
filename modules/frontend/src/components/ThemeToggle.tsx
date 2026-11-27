@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ioc from '@/lib';
+import type { Theme } from '@/lib/types';
 
-export const THEME_EVENT = 'pm:theme';
-export type Theme = 'light' | 'dark';
+export type { Theme } from '@/lib/types';
 
 export function currentTheme(): Theme {
   if (typeof document === 'undefined') return 'light';
@@ -12,7 +13,7 @@ export function currentTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-/** Light/dark switch. Stores the choice in localStorage; the chart and the code editor follow via `pm:theme`. */
+/** Light/dark switch. Stores the choice in localStorage; the chart and the code editor follow via chartService. */
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>('light');
   useEffect(() => { setTheme(currentTheme()); }, []);
@@ -20,7 +21,7 @@ export function ThemeToggle() {
     document.documentElement.dataset.theme = t;
     try { localStorage.setItem('pm-theme', t); } catch { /* ignore */ }
     setTheme(t);
-    window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: t }));
+    ioc.chartService.setTheme(t);
   };
   return (
     <button className="pill-btn" onClick={() => apply(theme === 'dark' ? 'light' : 'dark')} title="Switch theme" aria-label="Switch theme">

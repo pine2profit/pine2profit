@@ -1,0 +1,82 @@
+{
+ "head": {
+  "id": "volume-pressure",
+  "title": "Volume Pressure Delta",
+  "kind": "indicator",
+  "subcategory": "volume",
+  "usable": false,
+  "verdict": "NO",
+  "iterations": 1,
+  "updated": "2026-11-26",
+  "market": "BTCUSDT",
+  "timeframe": "1h",
+  "license": "MPL-2.0",
+  "author": "example_author",
+  "tvUrl": "https://www.tradingview.com/script/EXAMPLE03/",
+  "cycleStart": "2026-11-26",
+  "reason": "not tradeable: the signal depends on realtime tick data (varip) and cannot be reproduced on history, so no rule can be executed through alerts"
+ },
+ "messages": [
+  {
+   "code": "A0",
+   "title": "How to run it: timeframe, holding time, signal frequency",
+   "md": "The author publishes on BTCUSDT 1h. The script's only events are the zero crossings of the smoothed delta (lines 24–25): 1786 over the whole history (2024-11-27 → 2026-11-26), 885 in the last 12 months [[range:2025-11-26T23:00:00Z..2026-11-26T23:00:00Z]], 73.8 per month (run run_4a1c9e02). Holding time and the timeframe table are not computed: A2 finds no signal that is final at bar close, so there is no rule to run.\n\n| metric | value |\n|---|---|\n| author's timeframe | 1h |\n| zero crossings, whole history | 1786 |\n| zero crossings, last 12m | 885 |\n| expected hold | not computed — no tradeable rule |"
+  },
+  {
+   "code": "A1",
+   "title": "What does the script compute and what signals does it show?",
+   "md": "The script splits each bar's volume into buy and sell volume by comparing every realtime tick with the previous close (lines 13–17), accumulating both in `varip` variables that reset on a new bar (lines 6–12). It plots the difference as columns (line 21), its 20-bar SMA as a line (line 22) and a zero level (line 23). Two `alertcondition` calls fire when the smoothed delta crosses zero (lines 24–25); the author presents them as entry (positive) and exit (negative).\n\n| output | line | type | role intended by the author |\n|---|---|---|---|\n| Delta columns | 21 | columns | visualisation |\n| Smoothed line | 22 | line | signal source |\n| zero level | 23 | level | threshold |\n| Pressure turns positive | 24 | event | entry |\n| Pressure turns negative | 25 | event | exit |"
+  },
+  {
+   "code": "A2",
+   "title": "Which signal is known at bar close and can be placed in an alert?",
+   "md": "None. Both alerts (lines 24–25) fire on `smooth`, which is built from `buyVol` and `sellVol` — `varip` accumulators that update on every realtime tick (lines 6–8, 13–17). On a historical bar the script runs once, so the split collapses to the whole bar's volume on one side (line 14: `close >= close[1]`); in realtime it is the tick-by-tick split. The two series differ, so a signal computed on history does not describe what the alert will do, and an alert that fired cannot be checked against the chart afterwards. Example: on [[t:2026-03-22T18:00:00Z@89016]] (the highest-volume bar of the last 12 months, 962) the historical delta is −962 — the whole bar on one side — while any realtime split of the same bar lies between −962 and +962. A close-based reformulation would be a different indicator, not this one. **NO: not tradeable** — blocks B and C are skipped.\n\n| metric | value |\n|---|---|\n| tradeable signal | none |\n| cause | varip accumulators, lines 6–8 and 13–17 |\n| alert on history vs. realtime | different series |"
+  },
+  {
+   "code": "A3",
+   "title": "Does the tradeable signal repaint?",
+   "md": "There is no tradeable signal to check. For the author's smoothed delta the truncated-history test (200 points t, run run_b73d10f5) gives identical values on bars ≤ t: on history the script is deterministic. The problem is not repainting but the history/realtime mismatch from `varip` described in A2.\n\n| metric | value |\n|---|---|\n| signals changed after the fact (history) | 0% |\n| code findings | varip (6–8), barstate.isnew (9) |"
+  },
+  {
+   "code": "A4",
+   "title": "How often does the signal fire?",
+   "md": "Zero crossings of the smoothed delta on BTCUSDT 1h over the last 12 months [[range:2025-11-26T23:00:00Z..2026-11-26T23:00:00Z]]: 885, 73.8 per month; quietest month 9, busiest 97 (run run_4a1c9e02). For information only — the signal is not tradeable (A2).\n\n| metric | value |\n|---|---|\n| market/TF | BTCUSDT 1h |\n| crossings per month | 73.8 |\n| last 12m | 885 |\n| whole history | 1786 |"
+  },
+  {
+   "code": "D1",
+   "title": "Can money be made on this?",
+   "md": "**NO** — not tradeable: no signal is final at bar close (A2), so there is no rule to execute through alerts and no money to count.\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| tradeable signal (A2) | none |\n| blocks B, C | skipped |"
+  },
+  {
+   "code": "D4",
+   "title": "Would the agent put its own $10,000 on this for 6 months?",
+   "md": "No. There is nothing to execute: an alert on this script fires on realtime tick data that cannot be reproduced on history, so no backtest describes what the alert would have done.\n\n| metric | value |\n|---|---|\n| bet | no |"
+  },
+  {
+   "code": "D5",
+   "title": "What must happen in the forward test for the verdict to change?",
+   "md": "Nothing in a forward test can change it: there is no paper journal because there is no rule. The verdict is revisited only if the author publishes a version whose signal is computed from closed bars without `varip`; the cycle then restarts from A1.\n\n| metric | value |\n|---|---|\n| condition for YES | a new version without varip |\n| paper journal | none |"
+  },
+  {
+   "code": "E1",
+   "title": "What happened since the previous iteration?",
+   "md": "This is the first iteration: the cycle started on 2026-11-26. No rule, no journal.\n\n| metric | value |\n|---|---|\n| new bars | 0 |\n| trades this iteration | 0 |",
+   "iteration": 1,
+   "date": "2026-11-26"
+  },
+  {
+   "code": "E2",
+   "title": "Paper result since the first iteration on $10,000",
+   "md": "There is no rule to journal — nothing to compare.\n\n| metric | value |\n|---|---|\n| paper result | — |\n| trades | 0 |",
+   "iteration": 1,
+   "date": "2026-11-26"
+  },
+  {
+   "code": "E3",
+   "title": "Did the verdict change?",
+   "md": "No. D5 has no forward-test condition for this script.\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| changed | no |",
+   "iteration": 1,
+   "date": "2026-11-26"
+  }
+ ]
+}

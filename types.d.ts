@@ -1,4 +1,5 @@
 import http from 'http';
+import fs from 'fs';
 
 type CallbackFn = (error?: Error) => void;
 declare function serve(host?: string, port?: number, cwd?: string, callback?: CallbackFn): () => void;
@@ -17,12 +18,14 @@ declare const GLOBAL_CONFIG: {
     CC_WWWROOT_PATH: string;
     CC_WWWROOT_HOST: string;
     CC_WWWROOT_PORT: number;
+    CC_DATA_PATH: string;
 };
 type Config = typeof GLOBAL_CONFIG;
 declare const getConfig: () => {
     CC_WWWROOT_PATH: string;
     CC_WWWROOT_HOST: string;
     CC_WWWROOT_PORT: number;
+    CC_DATA_PATH: string;
 };
 declare const setConfig: (config: Partial<Config>) => void;
 
@@ -42,7 +45,26 @@ declare class LoggerService implements ILogger {
     setLogger: (logger: ILogger) => void;
 }
 
+interface DataFile {
+    path: string;
+    size: number;
+}
+declare class DataViewService {
+    private readonly loggerService;
+    /** <root>/data, where root is CC_DATA_PATH or the cwd passed to serve(). */
+    getRoot: () => string;
+    /**
+     * Absolute path of a file inside the data root, or null when the request points
+     * outside of it: checked on the lexical path and again on the real path, so a
+     * symlink inside data/ cannot lead out either.
+     */
+    resolve: (relPath: string) => Promise<string | null>;
+    stat: (relPath: string) => Promise<DataFile | null>;
+    createReadStream: (filePath: string) => fs.ReadStream;
+}
+
 declare const ioc: {
+    dataViewService: DataViewService;
     loggerService: LoggerService;
 };
 

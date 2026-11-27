@@ -3,7 +3,7 @@ import Router from "router";
 import finalhandler from "finalhandler";
 import serveHandler from "serve-handler";
 
-import health from "../routes/health";
+import data from "../routes/data";
 
 import { getConfig } from "./params";
 
@@ -13,24 +13,18 @@ const router = Router({
   params: true,
 });
 
-router.all("/api/v1/health/*", (req, res) => {
-  return health(req, res, finalhandler(req, res));
+// The agent's files: GET /data/<file> -> <root>/data/<file>. The same relative
+// paths the site requests on GitHub Pages, so nothing differs between the two.
+router.all("/data/*", (req, res) => {
+  return data(req, res, finalhandler(req, res));
 });
 
 // Next.js static export (modules/frontend, output: "export", trailingSlash: true):
-// /runs/<slug>/ -> runs/<slug>/index.html, 404.html is picked up by serve-handler.
+// /run/?id=x -> run/index.html, 404.html is picked up by serve-handler.
 router.get("/*", (req, res) => {
   const { CC_WWWROOT_PATH } = getConfig();
   return serveHandler(req, res, {
     public: CC_WWWROOT_PATH || getPublicPath(),
-    headers: [
-      {
-        source: "**/*.jsonl",
-        headers: [
-          { key: "Content-Type", value: "application/x-ndjson; charset=utf-8" },
-        ],
-      },
-    ],
   });
 });
 

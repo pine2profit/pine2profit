@@ -1,0 +1,191 @@
+{
+ "head": {
+  "id": "ema-ribbon",
+  "title": "EMA Ribbon Trend",
+  "kind": "indicator",
+  "subcategory": "trend",
+  "verdict": "NO",
+  "main": -3419,
+  "paper": 185,
+  "paperTrades": 2,
+  "expected": [
+   -682,
+   129
+  ],
+  "iterations": 3,
+  "updated": "2026-11-26",
+  "market": "BTCUSDT",
+  "timeframe": "1h",
+  "license": "MPL-2.0",
+  "author": "example_author",
+  "tvUrl": "https://www.tradingview.com/script/EXAMPLE01/",
+  "cycleStart": "2026-11-12",
+  "percentile": 59,
+  "reason": "12 months −$3,419; only 4/10 markets positive; not better than random entries (59th percentile)"
+ },
+ "messages": [
+  {
+   "code": "A0",
+   "title": "How to run it: timeframe, holding time, signal frequency",
+   "md": "**Timeframe.** The author publishes on BTCUSDT 1h; with 78 trades in the last 12 months that is enough, so 1h is the timeframe for every answer below. For reference the same rule on 15m, 4h and 1D over the same 12 months (run run_799136d3) is in the table — it is information, not a choice of the \"best\" timeframe.\n**Holding time.** Median trade lasts 28 bars (28 h); 80% of trades close within 2.8 days; 46% close within a day, 96% within a week. Expect the exit signal in **days**, not minutes. Example of a typical-length trade: [[trade:104]].\n**Frequency.** 6.5 signals per month on average over the last 12 months; quietest month 1, busiest 10.\n\n| timeframe | net $ 12m | trades/month | median hold |\n|---|---|---|---|\n| 15m | −$7,307 | 26.8 | 32 bars · 8 h |\n| 1h (author) | −$3,419 | 6.5 | 28 bars · 28 h |\n| 4h | −$3,054 | 1.5 | 17 bars · 2.8 days |\n| 1D | no trades in 12m | 0 | — |\n\n| metric | value |\n|---|---|\n| run on | 1h (author's timeframe) |\n| expected hold | 28 h median, 2.8 days p80 → days |\n| expected signals per month | 6.5 |"
+  },
+  {
+   "code": "A1",
+   "title": "What does the script compute and which signals does it emit?",
+   "md": "The script computes three EMAs of the close: 8, 21 and 55 bars (lines 8–10). The \"bull\" state is 8 > 21 > 55, \"bear\" is 55 > 21 > 8 (lines 11–12). The three lines are plotted (lines 13–15) and the background is tinted by state (line 16). Two `alertcondition` calls fire on the bar where a state has just formed (lines 17–18). The author intends the bull flip as a long entry and the bear flip as an exit or a short entry.\n\n| output | line | type | role intended by the author |\n|---|---|---|---|\n| Fast / Mid / Slow | 13–15 | line | visualisation |\n| bgcolor bull/bear | 16 | colour | regime |\n| Ribbon turns bullish | 17 | event | long entry |\n| Ribbon turns bearish | 18 | event | exit / short entry |"
+  },
+  {
+   "code": "A2",
+   "title": "Which signal is known at bar close and can be placed in an alert?",
+   "md": "Both `alertcondition` calls depend only on close-based EMAs and on the previous bar's value, so they are final at bar close and go into an \"Once Per Bar Close\" alert without rewording. Tradeable signal: \"Ribbon turns bullish\" for entry, \"Ribbon turns bearish\" for exit. Example signal bar: [[t:2025-11-19T18:00:00Z@117678]] — close 117,678; on the next bar the entry [[trade:65]] fills at 117,678.\n\n| metric | value |\n|---|---|\n| tradeable signal | bull and not bull[1] → entry; bear and not bear[1] → exit |\n| Pine condition | alertcondition(bull and not bull[1], …) |\n| alert setup | condition \"Ribbon turns bullish\", Once Per Bar Close |"
+  },
+  {
+   "code": "A3",
+   "title": "Does the tradeable signal repaint?",
+   "md": "Run on 200 truncated histories (run run_0d72d042): signals on bars ≤ t match the full run at all 200 checkpoints — 0% changed after the fact, 0 bars of delay. The code has no `request.security`, `calc_on_every_tick`, `varip`, negative offsets or pivots. Bar [[t:2025-11-19T18:00:00Z]] gives the same signal in the run truncated at itself as in the full run.\n\n| metric | value |\n|---|---|\n| changed after the fact | 0% |\n| delay to final value | 0 bars |\n| code findings | none |"
+  },
+  {
+   "code": "A4",
+   "title": "How often does the tradeable signal fire?",
+   "md": "On BTCUSDT 1h over the last 12 months — 78 entries, i.e. 6.5 per month; over the whole history (17520 bars) — 142 entries. Enough data for a verdict.\n\n| metric | value |\n|---|---|\n| market/TF | BTCUSDT 1h |\n| signals per month | 6.5 |\n| last 12m | 78 |"
+  },
+  {
+   "code": "B1",
+   "title": "What is the simplest honest trade rule for this signal?",
+   "md": "Main rule: long on the \"Ribbon turns bullish\" alert, filled at the next bar's open; exit on the \"Ribbon turns bearish\" alert, at the next bar's open. No stops, no shorts — the author's signal is used as is. Alternative (not computed): exit after 24 bars. The rule is written as a Pine strategy in `rule.pine`; its markers on the chart are exactly the trades discussed below.\n\n| metric | value |\n|---|---|\n| entry | bull and not bull[1] → next bar open |\n| exit | bear and not bear[1] → next bar open |\n| direction | long only |"
+  },
+  {
+   "code": "B2",
+   "title": "Which costs are included?",
+   "md": "Class — crypto perpetuals: commission 0.04% × 2, half spread 0.02%, slippage 0.02% — 0.12% round trip, i.e. $12 per trade at $10,000 notional. Execution delay — 1 bar (entry at the next bar's open). The author has no costs; an indicator script cannot have any.\n\n| metric | value |\n|---|---|\n| commission | 0.08% round trip |\n| spread/2 | 0.02% |\n| slippage | 0.02% |\n| total per trade | −$12 |"
+  },
+  {
+   "code": "B3",
+   "title": "What position size?",
+   "md": "Fixed $10,000 notional per trade, no leverage, no compounding, at most one position at a time. No 1%-risk variant — the rule has no stop.\n\n| metric | value |\n|---|---|\n| size | $10,000 notional |\n| max positions | 1 |"
+  },
+  {
+   "code": "C1",
+   "title": "How much did the rule make or lose on the author's market and timeframe over the whole history?",
+   "md": "Over the whole bar history (2024-11-27 → 2026-11-12, BTCUSDT 1h) the rule produced 142 trades and +$3,325 after costs. The most profitable trade — [[trade:54]] 2025-09-24 → 2025-10-03, entry 115,293, exit 135,273, +$1,721; the worst — [[trade:128]] 2026-09-18 → 2026-09-18, entry 57,457, exit 55,647, −$327. Maximum drawdown on closed trades $5,921 (run run_0ed311d2).\n\n| metric | value |\n|---|---|\n| net $ | +$3,325 |\n| trades | 142 |\n| average trade | +$23 |\n| winners | 30% |\n| max drawdown | $5,921 |\n| period | 2024-11-27 → 2026-11-12 |"
+  },
+  {
+   "code": "C2",
+   "title": "The same for the last 12 months",
+   "md": "Window [[range:2025-11-12T00:00:00Z..2026-11-12T00:00:00Z]]: 78 trades, −$3,419. First trade of the window — [[trade:65]] 2025-11-19 → 2025-11-21, entry 117,678, exit 117,348, −$40. These are bars the rule was not fitted on: parameters are the script defaults (run run_ccc95844).\n\n| metric | value |\n|---|---|\n| net $ | −$3,419 |\n| trades | 78 |\n| average trade | −$44 |\n| winners | 23% |\n| max drawdown | $5,215 |"
+  },
+  {
+   "code": "C3",
+   "title": "The same on 10 other markets of the same class, last 12 months",
+   "md": "Same rule code, same costs, same 12 months. 4 of 10 markets are positive (run run_133518df).\n\n| market | net $ 12m | trades |\n|---|---|---|\n| ETHUSDT | −$1,640 | 72 |\n| SOLUSDT | −$1,538 | 82 |\n| BNBUSDT | −$2,791 | 63 |\n| XRPUSDT | −$2,613 | 79 |\n| ADAUSDT | −$5 | 78 |\n| DOGEUSDT | +$1,017 | 67 |\n| AVAXUSDT | +$6,690 | 58 |\n| LINKUSDT | −$1,000 | 82 |\n| LTCUSDT | +$4,302 | 70 |\n| DOTUSDT | +$904 | 77 |"
+  },
+  {
+   "code": "C4",
+   "title": "Is it better than chance?",
+   "md": "1000 runs with random entries of the same frequency (78 in 12 months) and the same exit (bear and not bear[1]). The rule's −$3,419 sits at the 59th percentile of the random runs; random median −$4,163. Buy & hold on $10,000 over the same period: −$4,427 (122,318 → 68,170) (run run_14f82677).\n\n| metric | value |\n|---|---|\n| rule | −$3,419 |\n| random median | −$4,163 |\n| rule percentile | 59 |\n| buy & hold | −$4,427 |"
+  },
+  {
+   "code": "C5",
+   "title": "What is it like to sit through?",
+   "md": "Over 12 months 8 of 13 months were losing. Worst month 2026-02: −$1,258 — it contains [[trade:84]] −$254, [[trade:87]] −$209, [[trade:85]] −$191. Best month 2026-11: +$1,297. Longest losing streak — 10 trades, longest drawdown — 20414 days.\n\n| metric | value |\n|---|---|\n| losing months | 8 of 13 |\n| worst month | 2026-02 −$1,258 |\n| losing streak | 10 |\n| longest drawdown | 20414 days |"
+  },
+  {
+   "code": "C6",
+   "title": "What breaks it?",
+   "md": "12-month net on BTCUSDT 1h under changed conditions (run run_20c4d04c). No variant flips the sign.\n\n| variant | net $ | sign kept |\n|---|---|---|\n| base | −$3,419 | — |\n| costs ×2 | −$4,355 | yes |\n| parameters −30% (6/15/39) | −$4,990 | yes |\n| parameters +30% (10/27/72) | −$3,895 | yes |\n| 2-bar execution delay | −$3,375 | yes |"
+  },
+  {
+   "code": "C7",
+   "title": "The main number",
+   "md": "Had the alerts of this rule been placed for the last 12 months (2025-11-12 → 2026-11-12) and executed at the next bar's open with $12 costs per trade on a $10,000 account, the account would now hold **$6,581** (−$3,419).\n\n| metric | value |\n|---|---|\n| account | $6,581 |\n| change | −$3,419 |"
+  },
+  {
+   "code": "D1",
+   "title": "Can money be made on this?",
+   "md": "**NO** — 12 months −$3,419; only 4/10 markets positive; not better than random entries (59th percentile).\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| C2 > 0 | no |\n| C3 ≥ 6/10 | 4/10 |\n| C4 ≥ 95 | 59 |\n| C6 no sign flip | yes |\n| trades in 12m ≥ 30 | 78 |"
+  },
+  {
+   "code": "D2",
+   "title": "How much",
+   "md": "By month over the last 12 months: the middle of the distribution runs from −$682 to +$129 per month on $10,000 (25th and 75th percentiles of monthly results).\n\n| metric | value |\n|---|---|\n| expected per month | −$682 … +$129 |"
+  },
+  {
+   "code": "D3",
+   "title": "Under what conditions does it stop working?",
+   "md": "On this data neither doubled costs (−$4,355), nor parameter shifts, nor a 2-bar delay (−$3,375) flip the sign. Markets from C3 that are negative: ETHUSDT, SOLUSDT, BNBUSDT, XRPUSDT, ADAUSDT, LINKUSDT. The worst month 2026-02 (−$1,258) fell on [[range:2026-02-01T00:00:00Z..2026-03-01T00:00:00Z]] — that is the regime the rule does not survive.\n\n| metric | value |\n|---|---|\n| flips the sign | nothing |\n| negative markets | 6 |"
+  },
+  {
+   "code": "D4",
+   "title": "Would the agent put its own $10,000 on this for 6 months?",
+   "md": "No. 12 months −$3,419; only 4/10 markets positive; not better than random entries (59th percentile). An expectation of −$682 … +$129 per month against a $5,215 drawdown is a poor trade-off.\n\n| metric | value |\n|---|---|\n| bet | no |"
+  },
+  {
+   "code": "D5",
+   "title": "What must happen in the forward test for the verdict to change?",
+   "md": "The verdict changes to YES if the paper result over 6 months is above +$1,709, with at least 4 positive months and at least 30 trades.\n\n| metric | value |\n|---|---|\n| condition for NO | 3 months below −$5,215 |\n| condition for YES | 6 months above +$1,709, ≥4 positive months, ≥30 trades |"
+  },
+  {
+   "code": "E1",
+   "title": "What happened since the previous iteration?",
+   "md": "New bars: 168 ([[range:2026-11-19T00:00:00Z..2026-11-26T23:00:00Z]]). The rule gave no signals this week; no trades.\n\n| metric | value |\n|---|---|\n| new bars | 168 |\n| trades this iteration | 0 |\n| open position | no |",
+   "iteration": 3,
+   "date": "2026-11-26"
+  },
+  {
+   "code": "E2",
+   "title": "Paper result since the first iteration on $10,000",
+   "md": "Since 2026-11-12: 2 trades, +$185. The main number C7 (−$3,419 over 12 months, roughly −$285 per month) and the paper result over 14 days disagree in sign; it is too early to judge the magnitude.\n\n| metric | value |\n|---|---|\n| paper result | +$185 |\n| trades | 2 |\n| C7 per month | −$285 |",
+   "iteration": 3,
+   "date": "2026-11-26"
+  },
+  {
+   "code": "E3",
+   "title": "Did the verdict change?",
+   "md": "No. The conditions in D5 need at least 3 months of paper results; 14 days have passed. 76 days to the first check.\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| changed | no |",
+   "iteration": 3,
+   "date": "2026-11-26"
+  },
+  {
+   "code": "E1",
+   "title": "What happened since the previous iteration?",
+   "md": "New bars: 168 ([[range:2026-11-12T00:00:00Z..2026-11-19T23:00:00Z]]). Trades opened and closed: 1:\n\n- [[trade:144]] 2026-11-19 → 2026-11-26, entry 70,210, exit 71,950, +$236\n\nA position is currently open since [[t:2026-11-19T17:00:00Z@70210]] (entry 70,210); it is not closed yet and not in the journal.\n\n| metric | value |\n|---|---|\n| new bars | 168 |\n| trades this iteration | 1 |\n| open position | yes |",
+   "iteration": 2,
+   "date": "2026-11-19"
+  },
+  {
+   "code": "E2",
+   "title": "Paper result since the first iteration on $10,000",
+   "md": "Since 2026-11-12: 2 trades, +$185. The main number C7 (−$3,419 over 12 months, roughly −$285 per month) and the paper result over 7 days disagree in sign; it is too early to judge the magnitude.\n\n| metric | value |\n|---|---|\n| paper result | +$185 |\n| trades | 2 |\n| C7 per month | −$285 |",
+   "iteration": 2,
+   "date": "2026-11-19"
+  },
+  {
+   "code": "E3",
+   "title": "Did the verdict change?",
+   "md": "No. The conditions in D5 need at least 3 months of paper results; 7 days have passed. 83 days to the first check.\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| changed | no |",
+   "iteration": 2,
+   "date": "2026-11-19"
+  },
+  {
+   "code": "E1",
+   "title": "What happened since the previous iteration?",
+   "md": "This is the first iteration: the cycle started on 2026-11-12, there are no new bars and the paper journal is empty.\n\n| metric | value |\n|---|---|\n| new bars | 0 |\n| trades this iteration | 1 |\n| open position | yes |",
+   "iteration": 1,
+   "date": "2026-11-12"
+  },
+  {
+   "code": "E2",
+   "title": "Paper result since the first iteration on $10,000",
+   "md": "There are no trades in the paper journal yet — nothing to compare with C7.\n\n| metric | value |\n|---|---|\n| paper result | +$0 |\n| trades | 0 |\n| C7 per month | −$285 |",
+   "iteration": 1,
+   "date": "2026-11-12"
+  },
+  {
+   "code": "E3",
+   "title": "Did the verdict change?",
+   "md": "No. The conditions in D5 need at least 3 months of paper results; 0 days have passed. 90 days to the first check.\n\n| metric | value |\n|---|---|\n| verdict | NO |\n| changed | no |",
+   "iteration": 1,
+   "date": "2026-11-12"
+  }
+ ]
+}

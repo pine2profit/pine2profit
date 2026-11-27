@@ -1,3 +1,5 @@
+import "./main/start";
+
 export { getRouter, serve } from "./function/serve.function";
 export { setLogger } from "./function/setup.function";
 

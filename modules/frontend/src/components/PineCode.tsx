@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { THEME_EVENT, currentTheme } from './ThemeToggle';
+import ioc from '@/lib';
+import type { Theme } from '@/lib/types';
+import { currentTheme } from './ThemeToggle';
+
+const aceTheme = (t: Theme) => (t === 'dark' ? 'ace/theme/tomorrow_night' : 'ace/theme/github');
 
 /** Read-only Ace editor with a Pine Script highlighter. Ace is bundled from node_modules (no CDN). */
 export default function PineCode({ files }: { files: { name: string; code: string }[] }) {
@@ -11,6 +15,7 @@ export default function PineCode({ files }: { files: { name: string; code: strin
 
   useEffect(() => {
     let disposed = false;
+    let unTheme: (() => void) | null = null;
     (async () => {
       // ace.js must run first: the theme files call the global `ace.define`.
       const { default: ace } = await import('ace-builds/src-noconflict/ace');
@@ -49,16 +54,18 @@ export default function PineCode({ files }: { files: { name: string; code: strin
       const editor = ace.edit(host.current, {
         readOnly: true, highlightActiveLine: false, showPrintMargin: false, fontSize: 12.5, tabSize: 4, useWorker: false, wrap: false,
       });
-      editor.setTheme(currentTheme() === 'dark' ? 'ace/theme/tomorrow_night' : 'ace/theme/github');
+      editor.setTheme(aceTheme(currentTheme()));
       editor.session.setMode(new PineMode());
       editor.session.setValue(files[0]?.code ?? '');
       editor.renderer.setScrollMargin(8, 8, 0, 0);
       editorRef.current = editor;
-      const onTheme = (e: Event) => editor.setTheme((e as CustomEvent<string>).detail === 'dark' ? 'ace/theme/tomorrow_night' : 'ace/theme/github');
-      window.addEventListener(THEME_EVENT, onTheme);
-      return () => window.removeEventListener(THEME_EVENT, onTheme);
+      unTheme = ioc.chartService.themeSubject.subscribe((t: Theme) => editor.setTheme(aceTheme(t)));
     })();
-    return () => { disposed = true; try { editorRef.current?.destroy(); } catch { /* ignore */ } };
+    return () => {
+      disposed = true;
+      unTheme?.();
+      try { editorRef.current?.destroy(); } catch { /* ignore */ }
+    };
   }, [files]);
 
   return <div ref={host} className="ace-host" />;

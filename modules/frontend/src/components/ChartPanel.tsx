@@ -1,25 +1,25 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { withBase, usd } from '@/lib/base';
-import type { ChartRef, Trade } from '@/lib/types';
-import { THEME_EVENT, currentTheme, type Theme } from './ThemeToggle';
+import ioc from '@/lib';
+import { usd } from '@/lib/base';
+import type { Bar, ChartRef, Theme, Trade } from '@/lib/types';
+import { currentTheme } from './ThemeToggle';
 import type { ThemeId, UiTheme, VelaTheme } from '@luxalgo/vela';
 
 /** What `new Vela(host, { theme })` accepts: a built-in id or a full theme object. */
 type VelaThemeOption = ThemeId | VelaTheme | UiTheme;
 
-export const GOTO_EVENT = 'pm:goto';
-export const RESET_EVENT = 'pm:reset';
-
 interface Props {
-  slug: string;
   timeframe: string;
+  /** the author's script; empty when there is no code for this script */
   source: string;
   /** the agent's trade rule as a Pine strategy; empty when the indicator is not tradeable */
   rule: string;
+  bars: Bar[];
   trades: Trade[];
   refs: ChartRef[];
+  /** ms; NaN when unknown */
   cycleStart: number;
   tvUrl?: string;
   usable: boolean;
@@ -52,9 +52,9 @@ async function velaTheme(t: Theme): Promise<VelaThemeOption> {
 /**
  * Vela chart with the author's script and the agent's trade rule (strategy → fill markers; a separate pane
  * appears automatically for overlay=false indicators). Every chart reference in the agent's text is pinned
- * as a timeline mark; clicking a reference in the text (window event `pm:goto`) frames the chart on it.
+ * as a timeline mark; a reference sent through chartService.goto frames the chart on it.
  */
-export default function ChartPanel({ slug, timeframe, source, rule, trades, refs, cycleStart, tvUrl, usable }: Props) {
+export default function ChartPanel({ timeframe, source, rule, bars, trades, refs, cycleStart, tvUrl, usable }: Props) {
   const host = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef = useRef<any>(null);
@@ -82,7 +82,7 @@ export default function ChartPanel({ slug, timeframe, source, rule, trades, refs
       if (!chart) return;
       clearFocus();
       setFocus(r);
-      const A = pal.accent, W = pal.warn;
+      const A = pal.accent;
       if (r.kind === 't' && r.time != null) {
         chart.setVisibleRange({ from: r.time - 90 * tf, to: r.time + 40 * tf });
         if (r.price != null) {
@@ -111,22 +111,19 @@ export default function ChartPanel({ slug, timeframe, source, rule, trades, refs
         keep(chart.drawings.add('arrowmarkup', { paneId: 'price', anchors: [{ time: t.open_time, price: t.open_price }] }));
         if (t.close_time != null) keep(chart.drawings.add('arrowmarkdown', { paneId: 'price', anchors: [{ time: t.close_time, price: endPrice }] }));
         try { chart.renderer.setExternalCrosshair(t.open_time, t.open_price); } catch { /* ignore */ }
-        void W;
       }
     };
 
-    const onGoto = (e: Event) => goto((e as CustomEvent<ChartRef>).detail);
     const onReset = () => { clearFocus(); setFocus(null); chart?.setVisibleRangePreset?.('ALL'); };
-    const onTheme = async (e: Event) => { const t = (e as CustomEvent<Theme>).detail; pal = PALETTE[t]; try { chart?.setTheme(await velaTheme(t)); } catch { /* ignore */ } };
+    const onTheme = async (t: Theme) => { pal = PALETTE[t]; try { chart?.setTheme(await velaTheme(t)); } catch { /* ignore */ } };
     const onResize = () => { try { chart?.resize(); } catch { /* ignore */ } };
-    window.addEventListener(GOTO_EVENT, onGoto);
-    window.addEventListener(RESET_EVENT, onReset);
-    window.addEventListener(THEME_EVENT, onTheme);
+    const unGoto = ioc.chartService.gotoSubject.subscribe(goto);
+    const unReset = ioc.chartService.resetSubject.subscribe(onReset);
+    const unTheme = ioc.chartService.themeSubject.subscribe(onTheme);
     window.addEventListener('resize', onResize);
 
     (async () => {
       const [{ Vela }, { PineEngine }, theme] = await Promise.all([import('@luxalgo/vela'), import('@luxalgo/vela-pinets'), velaTheme(currentTheme())]);
-      const bars = await fetch(withBase(`/runs/${slug}/bars.json`)).then((r) => r.json());
       if (cancelled || !host.current) return;
       host.current.innerHTML = '';
       chart = new Vela(host.current, { data: bars, timeframe, theme, height: '100%' });
@@ -136,9 +133,11 @@ export default function ChartPanel({ slug, timeframe, source, rule, trades, refs
       await chart.ready();
       if (cancelled) return;
 
-      setStatus('running the author\'s script…');
-      const a = await chart.runIndicator(source, { language: 'pine' });
-      if (!a.ok) setError(`author's script: ${a.error?.message ?? a.error}`);
+      if (source.trim()) {
+        setStatus('running the author\'s script…');
+        const a = await chart.runIndicator(source, { language: 'pine' });
+        if (!a.ok) setError(`author's script: ${a.error?.message ?? a.error}`);
+      }
       if (rule.trim()) {
         setStatus('running the trade rule…');
         const b = await chart.runIndicator(rule, { language: 'pine' });
@@ -146,10 +145,12 @@ export default function ChartPanel({ slug, timeframe, source, rule, trades, refs
       }
       if (cancelled) return;
 
-      try {
-        const d = chart.drawings.add('vline', { paneId: 'price', anchors: [{ time: cycleStart, price: 0 }], style: { lineColor: pal.warn, lineWidth: 2, lineStyle: 'dotted' }, text: { value: 'cycle start', size: 'small' } });
-        if (d?.id) chart.drawings.lock(d.id);
-      } catch { /* ignore */ }
+      if (Number.isFinite(cycleStart)) {
+        try {
+          const d = chart.drawings.add('vline', { paneId: 'price', anchors: [{ time: cycleStart, price: 0 }], style: { lineColor: pal.warn, lineWidth: 2, lineStyle: 'dotted' }, text: { value: 'cycle start', size: 'small' } });
+          if (d?.id) chart.drawings.lock(d.id);
+        } catch { /* ignore */ }
+      }
 
       // every reference the agent made → a timeline mark
       try {
@@ -166,26 +167,26 @@ export default function ChartPanel({ slug, timeframe, source, rule, trades, refs
         chart.on('mark:click', ({ id }: { id: string }) => { const r = refs[Number(String(id).replace('ref-', ''))]; if (r) goto(r); });
       } catch { /* marks are optional */ }
 
-      setStatus(usable
+      setStatus(usable && rule.trim()
         ? `${trades.length} rule trades on the chart · ${refs.length} agent references marked above the time axis`
-        : `no trade rule — the signal is not tradeable (A2) · ${refs.length} agent references marked above the time axis`);
+        : `no trade rule — ${usable ? 'nothing to execute' : 'the signal is not tradeable (A2)'} · ${refs.length} agent references marked above the time axis`);
     })().catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
 
     return () => {
       cancelled = true;
-      window.removeEventListener(GOTO_EVENT, onGoto);
-      window.removeEventListener(RESET_EVENT, onReset);
-      window.removeEventListener(THEME_EVENT, onTheme);
+      unGoto();
+      unReset();
+      unTheme();
       window.removeEventListener('resize', onResize);
       try { chart?.destroy?.(); } catch { /* ignore */ }
     };
-  }, [slug, timeframe, source, rule, trades, refs, cycleStart, usable]);
+  }, [timeframe, source, rule, bars, trades, refs, cycleStart, usable]);
 
   return (
     <div className="chart-panel" id="chart">
       <div className="chart-bar">
         {focus
-          ? <><span className="focus"><b>{focus.block}</b><span>{focus.label}</span></span><button className="pill-btn" onClick={() => window.dispatchEvent(new Event(RESET_EVENT))}>reset</button></>
+          ? <><span className="focus"><b>{focus.block}</b><span>{focus.label}</span></span><button className="pill-btn" onClick={() => ioc.chartService.reset()}>reset</button></>
           : <span className="hint">click a reference in the text — the chart jumps there</span>}
         {tvUrl && <a className="tv" href={tvUrl} target="_blank" rel="noreferrer">Open on TradingView ↗</a>}
       </div>

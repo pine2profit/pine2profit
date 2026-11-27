@@ -1,43 +1,96 @@
 export type Kind = 'indicator' | 'strategy';
 export type VerdictWord = 'YES' | 'NO' | 'UNKNOWN';
+export type Theme = 'light' | 'dark';
 
-export interface Meta {
+/**
+ * One line of data/index_N.jsonl — everything the list card and the run header show. Field names are the
+ * same as IndexRow; only `id`, `title`, `kind`, `verdict` and `updated` are required. Dollars are integers.
+ * An absent field means null (numbers, strings) or its default (`usable` → true, counts → 0 / 1).
+ */
+export interface IndexLine {
+  id: string;
   title: string;
-  author: string;
-  tv_url: string;
   kind: Kind;
-  /** Family within the kind; keys from lib/taxonomy.ts. Assigned by the agent in A1. */
   subcategory?: string;
-  /** Indicators only: A2 found a signal that is final at bar close and can be placed in an alert. */
+  /** false when no signal is final at bar close (indicators): no rule, no money numbers */
   usable?: boolean;
-  usable_reason?: string;
+  verdict: VerdictWord;
+  /** 12 months via alerts, $ on a $10,000 account */
+  main?: number;
+  /** paper journal since the cycle start, $ */
+  paper?: number;
+  paperTrades?: number;
+  /** expected per month on $10,000: [low, high] */
+  expected?: [number, number];
+  iterations?: number;
+  /** YYYY-MM-DD */
+  updated: string;
+  market?: string;
+  timeframe?: string;
+  license?: string;
+  author?: string;
+  tvUrl?: string;
+  /** YYYY-MM-DD */
+  cycleStart?: string;
+  /** the rule's percentile against random entries */
+  percentile?: number;
+  /** one sentence under the verdict */
+  reason?: string;
+}
+
+/** An index line with every field present: what the card and the run header render. */
+export interface IndexRow {
+  id: string;
+  title: string;
+  kind: Kind;
+  subcategory: string | null;
+  usable: boolean;
+  verdict: VerdictWord;
+  main: number | null;
+  paper: number | null;
+  paperTrades: number;
+  expected: [number, number] | null;
+  iterations: number;
+  updated: string;
   market: string;
   timeframe: string;
   license: string;
-  source_sha256: string;
-  created: string;
-  updated: string;
-  cycle_start: string;
-  rule?: string;
-  rule_entry?: string;
-  rule_exit?: string;
+  author: string;
+  tvUrl: string;
+  cycleStart: string;
+  percentile: number | null;
+  reason: string;
 }
 
-export interface Verdict {
-  verdict: VerdictWord;
-  reason: string;
-  /** null when there is no rule to run (indicator not tradeable) */
-  expected_month_usd: [number, number] | null;
-  main_number_usd: number | null;
-  paper_pnl_usd: number | null;
-  paper_trades: number;
-  iterations: number;
-  updated: string;
+/** data/<id>_messages.json — the agent's text, rendered in file order. */
+export interface Message {
+  /** A0, B2, E1 … — groups the left navigation by the first letter; optional */
+  code?: string;
+  title: string;
+  md: string;
+  /** set on messages that belong to a dated iteration; consecutive messages with the same value form a section */
+  iteration?: number;
+  date?: string;
+}
+
+export interface MessagesFile {
+  /** the index line again, so a direct link to /run/?id=… needs no index scan */
+  head?: IndexLine;
+  messages: Message[];
+}
+
+export interface Bar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
 export interface Trade {
   id: number;
-  iteration: number;
+  iteration?: number;
   side: 'long' | 'short';
   open_time: number;
   open_price: number;
@@ -52,6 +105,21 @@ export interface EquityPoint {
   paper_usd: number | null;
 }
 
+/** data/<id>_candles.json */
+export interface CandlesFile {
+  timeframe?: string;
+  bars: Bar[];
+  trades?: Trade[];
+  equity?: EquityPoint[];
+}
+
+/** data/<id>_pinescript.json — absent for scripts without code to show */
+export interface PinescriptFile {
+  source: string;
+  /** the agent's trade rule as a Pine strategy; absent when the signal is not tradeable */
+  rule?: string;
+}
+
 /** A reference from the agent's text to the chart. */
 export interface ChartRef {
   kind: 't' | 'range' | 'trade';
@@ -64,44 +132,14 @@ export interface ChartRef {
   trade?: number;
 }
 
+/** A rendered message. */
 export interface Block {
-  code: string; // A1, B2, C7, E1 …
+  key: string;
+  code: string;
   title: string;
   html: string;
   md: string;
   refs: ChartRef[];
-  iteration: number;
-}
-
-export interface Iteration {
-  n: number;
-  date: string;
-  blocks: Block[];
-}
-
-export interface Run {
-  slug: string;
-  meta: Meta;
-  verdict: Verdict;
-  trades: Trade[];
-  equity: EquityPoint[];
-  source: string;
-  rule: string;
-  iterations: Iteration[];
-}
-
-/** One line of public/runs/index.jsonl — what the list page works with. */
-export interface IndexRow {
-  slug: string;
-  title: string;
-  kind: Kind;
-  subcategory: string | null;
-  usable: boolean;
-  verdict: VerdictWord;
-  expected: [number, number] | null;
-  main: number | null;
-  paper: number | null;
-  paperTrades: number;
-  iterations: number;
-  updated: string;
+  iteration: number | null;
+  date?: string;
 }

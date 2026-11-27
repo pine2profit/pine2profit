@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import { VirtuosoGrid } from 'react-virtuoso';
+import ioc from '@/lib';
 import type { IndexRow, Kind, VerdictWord } from '@/lib/types';
 import { SUBCATS } from '@/lib/taxonomy';
-import { withBase } from '@/lib/base';
 import { RunCard } from './RunCard';
 
 const PAGE = 60; // cards appended per "reached the bottom"
@@ -13,10 +13,10 @@ type SortKey = 'verdict' | 'main' | 'paper' | 'expected' | 'updated' | 'title';
 const num = (v: number | null | undefined) => (v == null ? -Infinity : v);
 
 /**
- * The list reads public/runs/index.jsonl (one JSON object per line, written at build time) and streams it
- * line by line, so the first cards render before a large index finishes downloading. Filtering and sorting
+ * The list is fed by IndexViewService, which streams data/index_1.jsonl, index_2.jsonl, … and pushes the rows
+ * read so far, so the first cards render before a large index finishes downloading. Filtering and sorting
  * happen in memory; VirtuosoGrid virtualises the DOM and `endReached` appends the next page of cards,
- * which keeps thousands of scripts scrollable.
+ * which keeps tens of thousands of scripts scrollable.
  */
 export function RunsList() {
   const [all, setAll] = useState<IndexRow[]>([]);
@@ -29,29 +29,13 @@ export function RunsList() {
   const [limit, setLimit] = useState(PAGE);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(withBase('/runs/index.jsonl'));
-      const rows: IndexRow[] = [];
-      const push = (line: string) => { const l = line.trim(); if (l) rows.push(JSON.parse(l) as IndexRow); };
-      const reader = res.body?.getReader();
-      if (reader) {
-        const dec = new TextDecoder(); let buf = '';
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const parts = buf.split('\n'); buf = parts.pop() ?? '';
-          parts.forEach(push);
-          if (!cancelled) setAll([...rows]);
-        }
-        push(buf);
-      } else {
-        (await res.text()).split('\n').forEach(push);
-      }
-      if (!cancelled) { setAll([...rows]); setLoading(false); }
-    })().catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    const svc = ioc.indexViewService;
+    setAll(svc.getRows());
+    if (svc.doneSubject.data) setLoading(false);
+    const unRows = svc.rowsSubject.subscribe((rows: IndexRow[]) => startTransition(() => setAll(rows)));
+    const unDone = svc.doneSubject.subscribe((done: boolean) => { if (done) setLoading(false); });
+    svc.load().catch(() => setLoading(false));
+    return () => { unRows(); unDone(); };
   }, []);
 
   const inScope = useCallback((r: IndexRow) => (kind === 'all' || r.kind === kind) && (verdict === 'all' || r.verdict === verdict), [kind, verdict]);
@@ -74,10 +58,10 @@ export function RunsList() {
   const visible = useMemo(() => shown.slice(0, limit), [shown, limit]);
   const loadMore = useCallback(() => setLimit((n) => (n < shown.length ? Math.min(n + PAGE, shown.length) : n)), [shown.length]);
 
-  const chips = kind === 'all' ? [] : SUBCATS[kind].map(([key, label]) => {
+  const chips = useMemo(() => kind === 'all' ? [] : SUBCATS[kind].map(([key, label]) => {
     const count = all.filter((r) => r.kind === kind && (verdict === 'all' || r.verdict === verdict) && r.subcategory === key).length;
     return { key, label, count };
-  });
+  }), [all, kind, verdict]);
 
   return (
     <>
@@ -93,7 +77,7 @@ export function RunsList() {
           <option value="expected">sort: expected per month</option><option value="updated">sort: updated</option><option value="title">sort: name</option>
         </select>
         <button className="pill-btn mono" onClick={() => setDir((d) => (d === 1 ? -1 : 1))} title="sort direction" aria-label="sort direction">{dir === 1 ? '↑' : '↓'}</button>
-        <span className="count">{loading ? 'loading…' : `${shown.length} of ${all.length}`}</span>
+        <span className="count">{loading ? `loading… ${all.length}` : `${shown.length} of ${all.length}`}</span>
       </div>
       {chips.length > 0 && (
         <div className="chips">
@@ -111,7 +95,7 @@ export function RunsList() {
         endReached={loadMore}
         listClassName="cards"
         itemClassName="cards-item"
-        computeItemKey={(_, row) => row.slug}
+        computeItemKey={(_, row) => row.id}
         itemContent={(_, row) => <RunCard row={row} />}
       />
       {!loading && !shown.length && <div className="empty">nothing matches the filters</div>}
