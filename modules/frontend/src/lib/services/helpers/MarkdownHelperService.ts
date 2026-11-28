@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
+import type Token from 'markdown-it/lib/token.mjs';
 import { inject } from '../../core/di';
 import { TYPES } from '../../core/types';
 import LoggerService from '../base/LoggerService';
@@ -84,6 +85,10 @@ function chartRefPlugin(md: MarkdownIt, ctx: RenderContext) {
     return `${refAnchor(md, r, md.utils.escapeHtml(r.label))}</a>`;
   };
 
+  // tables scroll inside the block instead of pushing the card wider
+  md.renderer.rules.table_open = () => '<div class="table-wrap"><table>';
+  md.renderer.rules.table_close = () => '</table></div>';
+
   // [text](ref:…) links → the same anchor; everything else opens in a new tab
   const defaultLinkOpen = md.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options));
   md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
@@ -101,6 +106,41 @@ function chartRefPlugin(md: MarkdownIt, ctx: RenderContext) {
   };
 }
 
+/** A cell that is only a number with its decoration: "97", "+1,234", "−$2,465", "54%", "2026-11-26", "−599 … +181". */
+const NUMERIC_CELL = /^[\s\d.,+\-−–%$€£×:/()…→~<>=≥≤·]*\d[\s\d.,+\-−–%$€£×:/()…→~<>=≥≤·]*$/;
+const EMPTY_CELL = /^[\s—–-]*$/;
+
+/**
+ * Marks table columns whose body cells are all numbers with class "num": those are right-aligned in a
+ * monospace font and never wrap; text columns stay left-aligned and wrap, so a long value cannot push
+ * the table out of the card.
+ */
+function alignTableColumns(tokens: Token[]) {
+  let cells: { token: Token; col: number; body: boolean; text: string }[] = [];
+  let col = -1;
+  for (let i = 0; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (t.type === 'table_open') { cells = []; continue; }
+    if (t.type === 'tr_open') { col = -1; continue; }
+    if (t.type === 'th_open' || t.type === 'td_open') {
+      col += 1;
+      const inline = tokens[i + 1];
+      cells.push({ token: t, col, body: t.type === 'td_open', text: inline?.type === 'inline' ? inline.content.trim() : '' });
+      continue;
+    }
+    if (t.type === 'table_close') {
+      const cols = Math.max(-1, ...cells.map((c) => c.col)) + 1;
+      for (let c = 0; c < cols; c += 1) {
+        const body = cells.filter((x) => x.col === c && x.body && !EMPTY_CELL.test(x.text));
+        if (body.length && body.every((x) => NUMERIC_CELL.test(x.text))) {
+          for (const x of cells) if (x.col === c) x.token.attrJoin('class', 'num');
+        }
+      }
+      cells = [];
+    }
+  }
+}
+
 /** Renders one message of data/<id>_messages.json into HTML and collects its chart references. */
 export class MarkdownHelperService {
   private readonly loggerService = inject<LoggerService>(TYPES.loggerService);
@@ -111,12 +151,14 @@ export class MarkdownHelperService {
     const refs: ChartRef[] = [];
     const md = new MarkdownIt({ html: false, linkify: true, breaks: false });
     md.use(chartRefPlugin, { trades, block: code || key, refs });
+    const tokens = md.parse(message.md ?? '', {});
+    alignTableColumns(tokens);
     return {
       key,
       code,
       group: message.group ?? (/^[A-Za-z]+/.exec(code)?.[0].toUpperCase() ?? ''),
       title: message.title,
-      html: md.render(message.md ?? ''),
+      html: md.renderer.render(tokens, md.options, {}),
       md: message.md ?? '',
       refs,
       iteration: message.iteration ?? null,

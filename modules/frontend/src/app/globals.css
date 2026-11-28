@@ -146,16 +146,31 @@ select.pill-select.dim { color: var(--t2); }
 .refs-badge { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .refs-badge.has { background: var(--acc); color: var(--acc-ink); }
 .refs-badge.none { background: var(--warn-soft); color: var(--t1); }
-.block .md { padding: 2px 18px 10px; font-size: 15px; line-height: 1.6; }
+.block .md { padding: 2px 18px 10px; font-size: 15px; line-height: 1.6; min-width: 0; overflow-wrap: anywhere; }
 .block .md p { margin: 0 0 10px; text-wrap: pretty; }
-.block .md ul { margin: 0 0 10px; padding-left: 20px; }
+.block .md h1, .block .md h2, .block .md h3, .block .md h4, .block .md h5, .block .md h6 { font-family: var(--font); font-weight: 700; letter-spacing: 0; line-height: 1.3; margin: 14px 0 6px; }
+.block .md h1 { font-size: 18px; } .block .md h2 { font-size: 17px; } .block .md h3 { font-size: 16px; } .block .md h4, .block .md h5, .block .md h6 { font-size: 15px; }
+.block .md ul, .block .md ol { margin: 0 0 10px; padding-left: 22px; }
 .block .md li { margin: 0 0 4px; }
+.block .md li > ul, .block .md li > ol { margin: 4px 0 0; }
 .block .md strong { font-weight: 650; }
-.block .md table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; margin: 6px 0 8px; }
-.block .md th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); color: var(--t3); font-weight: 500; font-size: 12px; }
-.block .md td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bg2); vertical-align: top; }
-.block .md th:not(:first-child), .block .md td:not(:first-child) { text-align: right; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
-a.ref { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; line-height: 18px; padding: 1px 10px 1px 8px; margin: 1px 0; border-radius: 999px; border: 1px solid var(--acc); color: var(--acc); background: var(--acc-soft); vertical-align: baseline; }
+.block .md blockquote { margin: 0 0 10px; padding: 6px 14px; border-left: 3px solid var(--acc); border-radius: 0 10px 10px 0; background: var(--bg2); color: var(--t2); }
+.block .md blockquote > :last-child { margin-bottom: 0; }
+.block .md hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.block .md pre { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--code-bg); border: 1px solid var(--line); overflow-x: auto; font-size: 12.5px; line-height: 1.5; }
+.block .md pre code { background: none; padding: 0; font-size: inherit; white-space: pre; }
+.block .md img { max-width: 100%; height: auto; border-radius: 10px; }
+/* tables: numeric columns (class "num", set at render time) are right-aligned mono and never wrap; text columns wrap;
+   a table wider than the block scrolls inside .table-wrap instead of pushing the card wider */
+.block .md .table-wrap { overflow-x: auto; margin: 6px 0 8px; max-width: 100%; }
+.block .md table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; margin: 0; }
+.block .md th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); color: var(--t3); font-weight: 500; font-size: 12px; vertical-align: bottom; }
+.block .md td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--bg2); vertical-align: top; overflow-wrap: break-word; }
+.block .md th:first-child, .block .md td:first-child { padding-left: 0; }
+.block .md th:last-child, .block .md td:last-child { padding-right: 0; }
+.block .md th.num, .block .md td.num { text-align: right; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.block .md td:not(.num):not(:first-child) { font-family: var(--mono); font-size: 12.5px; color: var(--t1); }
+a.ref { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 12px; line-height: 18px; padding: 1px 10px 1px 8px; margin: 1px 0; border-radius: 999px; border: 1px solid var(--acc); color: var(--acc); background: var(--acc-soft); vertical-align: baseline; white-space: nowrap; }
 a.ref i { width: 6px; height: 6px; border-radius: 3px; background: currentColor; display: inline-block; }
 a.ref.ref-trade { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
 a.ref:hover { text-decoration: none; filter: brightness(.95); }
